@@ -1,0 +1,2703 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quarantine — Package Approval</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d0f12;
+    --surface:  #161a1f;
+    --surface2: #1e2329;
+    --border:   rgba(255,255,255,0.07);
+    --border2:  rgba(255,255,255,0.13);
+    --text:     #e8eaed;
+    --muted:    #7c8493;
+    --accent:   #3b82f6;
+    --green:    #22c55e;
+    --red:      #ef4444;
+    --amber:    #f59e0b;
+    --tag-bg:   rgba(59,130,246,0.12);
+    --tag-text: #93c5fd;
+    --font: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+  .logo i { color: var(--accent); font-size: 18px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  /* ── Badge counts ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-pending  { background: rgba(245,158,11,0.2); color: var(--amber); }
+  .badge-approved { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-rejected { background: rgba(239,68,68,0.15); color: var(--red); }
+
+  /* ── Security severity chips ── */
+  .sev {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; padding: 2px 6px;
+    border-radius: 3px; text-transform: uppercase; letter-spacing: .04em;
+    white-space: nowrap;
+  }
+  .sev.critical { background: rgba(239,68,68,0.2);   color: #f87171; }
+  .sev.high     { background: rgba(249,115,22,0.2);  color: #fb923c; }
+  .sev.medium   { background: rgba(245,158,11,0.2);  color: var(--amber); }
+  .sev.low      { background: rgba(34,197,94,0.15);  color: var(--green); }
+  .sev.none     { background: rgba(100,116,139,0.15); color: var(--muted); }
+  .sev-clean    { color: var(--green); font-size: 13px; }
+  .sev-scanning { color: var(--muted); font-size: 12px; }
+
+  /* ── Vuln list in drawer ── */
+  .vuln-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .vuln-item {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px;
+  }
+  .vuln-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .vuln-id     { font-size: 12px; font-weight: 600; color: var(--text); }
+  .vuln-source { font-size: 11px; color: var(--muted); }
+  .cvss-score  {
+    font-size: 11px; font-weight: 700; padding: 1px 5px;
+    border-radius: 3px; background: rgba(100,116,139,0.15); color: var(--text);
+  }
+  .cwe-badge {
+    font-size: 10px; padding: 1px 5px; border-radius: 3px;
+    background: rgba(168,85,247,0.15); color: #c084fc;
+    font-weight: 600;
+  }
+  .epss-badge {
+    font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 700;
+    cursor: default;
+  }
+  .epss-high   { background: rgba(239,68,68,0.15);   color: #f87171; }
+  .epss-medium { background: rgba(245,158,11,0.15);  color: var(--amber); }
+  .epss-low    { background: rgba(100,116,139,0.15); color: var(--muted); }
+
+  /* ── Tooltip EPSS ── */
+  .epss-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+  .epss-tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: 230px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    z-index: 600;
+    pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .epss-wrap:hover .epss-tooltip { display: block; }
+  /* Flèche */
+  .epss-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 14px;
+    border: 5px solid transparent;
+    border-top-color: var(--border2);
+  }
+  .epss-tt-header {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .epss-tt-header span { color: var(--accent); }
+  .epss-tt-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 8px; margin-bottom: 4px; font-size: 11px;
+  }
+  .epss-tt-label { color: var(--muted); }
+  .epss-tt-value { font-weight: 700; font-size: 12px; }
+  .epss-tt-bar-wrap {
+    height: 4px; background: rgba(255,255,255,0.07);
+    border-radius: 2px; margin: 6px 0 8px;
+  }
+  .epss-tt-bar { height: 100%; border-radius: 2px; }
+  .epss-tt-desc {
+    font-size: 10px; color: var(--muted); line-height: 1.55;
+    border-top: 1px solid var(--border); padding-top: 7px; margin-top: 2px;
+  }
+  .vuln-title  { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  .vuln-refs   { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .vuln-ref    { font-size: 10px; color: #60a5fa; text-decoration: none; }
+  .vuln-ref:hover { text-decoration: underline; }
+
+  /* ── Source section header ── */
+  .source-section { margin-top: 10px; }
+  .source-header {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin-bottom: 6px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .source-header .source-name { color: var(--text); }
+  .source-header .source-count {
+    background: rgba(100,116,139,0.2); color: var(--muted);
+    padding: 1px 6px; border-radius: 10px; font-size: 10px;
+  }
+  /* ── Risk score badge ── */
+  .risk-score {
+    font-size: 11px; font-weight: 700; padding: 2px 7px;
+    border-radius: 3px; font-variant-numeric: tabular-nums; white-space: nowrap;
+    cursor: default;
+  }
+  .risk-score.rs-critical { background: rgba(239,68,68,0.2);    color: #f87171; }
+  .risk-score.rs-high     { background: rgba(249,115,22,0.2);   color: #fb923c; }
+  .risk-score.rs-medium   { background: rgba(245,158,11,0.2);   color: var(--amber); }
+  .risk-score.rs-low      { background: rgba(100,116,139,0.15); color: var(--muted); }
+
+  /* ── Sec summary bar ── */
+  .sec-summary {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; margin-bottom: 8px;
+  }
+  .sec-summary-label { font-size: 11px; color: var(--muted); }
+  .sec-summary-sep { color: var(--border2); font-size: 14px; }
+
+  /* ── Layout ── */
+  .layout {
+    display: flex;
+    height: calc(100vh - 52px);
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    width: 200px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 0;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 1.25rem;
+    cursor: pointer;
+    color: var(--muted);
+    border-left: 2px solid transparent;
+    transition: all 0.12s;
+    user-select: none;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface); }
+  .nav-item.active { color: var(--text); border-left-color: var(--accent); background: var(--surface); }
+  .nav-item .nav-label { display: flex; align-items: center; gap: 8px; }
+  .nav-item i { font-size: 15px; }
+  .nav-section {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 1.5rem 1.25rem 0.5rem;
+    opacity: 0.6;
+  }
+  .refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0.4rem 1.25rem 0;
+    padding: 7px 12px;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12px;
+    transition: all 0.12s;
+    width: calc(100% - 2.5rem);
+  }
+  .refresh-btn:hover { color: var(--text); border-color: var(--accent); }
+  .refresh-btn.spinning i { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Main ── */
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.25rem;
+  }
+  .search {
+    flex: 1;
+    max-width: 320px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0 12px;
+    height: 34px;
+  }
+  .search i { color: var(--muted); font-size: 15px; }
+  .search input {
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    width: 100%;
+  }
+  .search input::placeholder { color: var(--muted); }
+
+  .filter-group { display: flex; gap: 6px; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12px;
+    transition: all 0.12s;
+  }
+  .chip:hover { border-color: var(--border2); color: var(--text); }
+  .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.08); }
+
+  /* ── Table ── */
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--surface); }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+  td {
+    padding: 11px 14px;
+    vertical-align: middle;
+    color: var(--text);
+  }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ── Repo type pill ── */
+  .repo-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+  }
+  .repo-pill svg { flex-shrink: 0; }
+  .repo-pill.docker { background: rgba(29,99,237,0.15);  color: #60a5fa; }
+  .repo-pill.apt    { background: rgba(215,7,81,0.13);   color: #f472b6; }
+  .repo-pill.npm    { background: rgba(203,56,55,0.13);  color: #f87171; }
+  .repo-pill.pip    { background: rgba(55,118,171,0.13); color: #67c8e8; }
+  .repo-pill.r      { background: rgba(33,101,182,0.13); color: #93c5fd; }
+  .repo-pill.go     { background: rgba(0,172,215,0.13);  color: #22d3ee; }
+
+  .chip i, .chip svg { flex-shrink: 0; font-size: 14px; }
+
+  /* ── Status pill ── */
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .status-pill::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+  .status-pill.pending  { background: rgba(245,158,11,0.12); color: var(--amber); }
+  .status-pill.pending::before  { background: var(--amber); }
+  .status-pill.approved { background: rgba(34,197,94,0.12);  color: var(--green); }
+  .status-pill.approved::before { background: var(--green); }
+  .status-pill.rejected { background: rgba(239,68,68,0.12);  color: var(--red); }
+  .status-pill.rejected::before { background: var(--red); }
+
+  /* ── Action buttons ── */
+  .actions { display: flex; gap: 6px; align-items: center; }
+  .btn-approve, .btn-reject, .btn-detail {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-family: var(--font);
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.12s;
+  }
+  .btn-approve {
+    background: rgba(34,197,94,0.1);
+    border-color: rgba(34,197,94,0.3);
+    color: var(--green);
+  }
+  .btn-approve:hover { background: rgba(34,197,94,0.2); }
+  .btn-reject {
+    background: rgba(239,68,68,0.1);
+    border-color: rgba(239,68,68,0.3);
+    color: var(--red);
+  }
+  .btn-reject:hover { background: rgba(239,68,68,0.2); }
+  .btn-detail {
+    background: none;
+    border-color: var(--border2);
+    color: var(--muted);
+  }
+  .btn-detail:hover { color: var(--text); border-color: var(--border2); }
+
+  /* ── Detail panel (drawer) ── */
+  .drawer-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 200;
+  }
+  .drawer-overlay.open { display: block; }
+  .drawer {
+    position: fixed;
+    top: 0; right: 0;
+    width: 460px;
+    height: 100vh;
+    background: var(--surface);
+    border-left: 1px solid var(--border2);
+    z-index: 201;
+    transform: translateX(100%);
+    transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+  }
+  .drawer-title { font-size: 15px; font-weight: 600; }
+  .drawer-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 2px;
+    line-height: 1;
+  }
+  .drawer-close:hover { color: var(--text); }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+  }
+  .meta-cell {
+    background: var(--bg);
+    padding: 10px 12px;
+  }
+  .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 3px; }
+  .meta-value { font-size: 13px; color: var(--text); word-break: break-all; }
+  .sha-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 1.25rem;
+    font-size: 11px;
+    color: var(--muted);
+    word-break: break-all;
+  }
+  .sha-block span { color: var(--accent); }
+  .comment-area {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    resize: vertical;
+    min-height: 80px;
+    margin-bottom: 1rem;
+    outline: none;
+  }
+  .comment-area:focus { border-color: var(--border2); }
+  .drawer-actions { display: flex; gap: 8px; }
+  .drawer-btn {
+    flex: 1;
+    padding: 9px;
+    border-radius: 6px;
+    font-family: var(--font);
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid;
+    transition: all 0.12s;
+    font-weight: 500;
+  }
+  .drawer-approve {
+    background: rgba(34,197,94,0.12);
+    border-color: rgba(34,197,94,0.35);
+    color: var(--green);
+  }
+  .drawer-approve:hover { background: rgba(34,197,94,0.22); }
+  .drawer-reject {
+    background: rgba(239,68,68,0.1);
+    border-color: rgba(239,68,68,0.3);
+    color: var(--red);
+  }
+  .drawer-reject:hover { background: rgba(239,68,68,0.2); }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--muted);
+  }
+  .empty i { font-size: 36px; display: block; margin-bottom: 1rem; opacity: 0.4; }
+  .empty p { font-size: 14px; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 999;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.2s;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: rgba(34,197,94,0.4); color: var(--green); }
+  .toast.error   { border-color: rgba(239,68,68,0.4);  color: var(--red); }
+
+  /* ── Requested-by cell ── */
+  .requester {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .requester i { font-size: 13px; }
+
+  .size-cell { color: var(--muted); font-size: 12px; }
+  .time-cell { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+  hr.drawer-sep { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+
+  /* ── URL block ── */
+  .url-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .url-block a {
+    color: var(--accent);
+    font-size: 11px;
+    word-break: break-all;
+    flex: 1;
+    text-decoration: none;
+  }
+  .url-block a:hover { text-decoration: underline; }
+  .copy-btn {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 3px 6px;
+    font-size: 12px;
+    line-height: 1;
+    transition: all 0.12s;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ── Historique timeline ── */
+  .timeline { display: flex; flex-direction: column; gap: 0; margin-top: 6px; }
+  .tl-item { display: flex; gap: 10px; position: relative; padding-bottom: 12px; }
+  .tl-item:last-child { padding-bottom: 0; }
+  .tl-dot-wrap { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 22px; }
+  .tl-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px;
+    border: 2px solid var(--surface);
+  }
+  .tl-line { flex: 1; width: 2px; background: var(--border); margin-top: 2px; }
+  .tl-item:last-child .tl-line { display: none; }
+  .tl-body { flex: 1; min-width: 0; }
+  .tl-action { font-size: 12px; font-weight: 600; }
+  .tl-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .tl-comment { font-size: 11px; color: var(--muted); margin-top: 3px; font-style: italic; }
+  .tl-dot.approved { background: var(--green); }
+  .tl-dot.rejected { background: var(--red); }
+  .tl-dot.revoked  { background: var(--amber); }
+  .tl-dot.pending  { background: var(--muted); }
+  .tl-action.approved { color: var(--green); }
+  .tl-action.rejected { color: var(--red); }
+  .tl-action.revoked  { color: var(--amber); }
+
+  /* ── Docker pull command block ── */
+  .pull-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid rgba(30,144,255,0.5);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pull-block code {
+    color: #60a5fa;
+    font-size: 11px;
+    font-family: var(--font);
+    flex: 1;
+    word-break: break-all;
+  }
+
+  /* ── Language selector ── */
+  .lang-sel {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 4px 8px;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.15s;
+  }
+  .lang-sel:hover, .lang-sel:focus { color: var(--text); border-color: var(--accent); }
+  .lang-sel option { background: var(--surface2); color: var(--text); }
+
+  /* ── Icon button ── */
+  .btn-icon {
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 13px;
+    transition: all 0.12s;
+  }
+  .btn-icon:hover { color: var(--text); border-color: var(--border2); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <i class="ti ti-shield-lock" aria-hidden="true"></i>
+    quarantine
+  </div>
+  <div class="header-right">
+    <span id="header-pending" class="badge badge-pending">0</span>
+    <span style="color:var(--muted)" data-i18n="header.pending">en attente</span>
+    <span id="header-user" style="display:none;align-items:center;gap:5px;color:var(--muted);font-size:12px">
+      <i class="ti ti-user-circle" style="font-size:15px"></i>
+      <span id="header-username"></span>
+      <button class="btn-icon" id="btn-logout" onclick="logout()" data-i18n-title="btn.logout" title="Se déconnecter" style="padding:3px 7px;font-size:13px;line-height:1"><i class="ti ti-logout"></i></button>
+    </span>
+    <select id="lang-sel" class="lang-sel" onchange="applyLang(this.value)" title="Language">
+      <option value="fr">🇫🇷 FR</option>
+      <option value="en">🇬🇧 EN</option>
+      <option value="de">🇩🇪 DE</option>
+      <option value="es">🇪🇸 ES</option>
+      <option value="zh">🇨🇳 中文</option>
+      <option value="ja">🇯🇵 日本語</option>
+    </select>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="nav-section" data-i18n="nav.files">Files</div>
+    <div class="nav-item active" data-filter="pending" onclick="setView('packages',this);setFilter('pending',this)">
+      <span class="nav-label"><i class="ti ti-clock-hour-4" aria-hidden="true"></i><span data-i18n="nav.pending">En attente</span></span>
+      <span id="count-pending" class="badge badge-pending">0</span>
+    </div>
+    <div class="nav-item" data-filter="approved" onclick="setView('packages',this);setFilter('approved',this)">
+      <span class="nav-label"><i class="ti ti-circle-check" aria-hidden="true"></i><span data-i18n="nav.approved">Approuvés</span></span>
+      <span id="count-approved" class="badge badge-approved">0</span>
+    </div>
+    <div class="nav-item" data-filter="rejected" onclick="setView('packages',this);setFilter('rejected',this)">
+      <span class="nav-label"><i class="ti ti-circle-x" aria-hidden="true"></i><span data-i18n="nav.rejected">Rejetés</span></span>
+      <span id="count-rejected" class="badge badge-rejected">0</span>
+    </div>
+    <div class="nav-item" data-filter="all" onclick="setView('packages',this);setFilter('all',this)">
+      <span class="nav-label"><i class="ti ti-list" aria-hidden="true"></i><span data-i18n="nav.all">Tous</span></span>
+    </div>
+
+    <div class="nav-section" id="nav-section-security" data-i18n="nav.security">Sécurité</div>
+    <div class="nav-item" id="nav-rules" data-view="rules" onclick="setView('rules',this)">
+      <span class="nav-label"><i class="ti ti-adjustments-horizontal" aria-hidden="true"></i><span data-i18n="nav.auto_rules">Règles auto</span></span>
+      <span id="count-rules" class="badge badge-pending" style="background:rgba(59,130,246,0.15);color:#93c5fd">0</span>
+    </div>
+
+    <div class="nav-section" id="nav-section-admin" data-i18n="nav.admin">Administration</div>
+    <div class="nav-item" id="nav-users" data-view="users" onclick="setView('users',this)">
+      <span class="nav-label"><i class="ti ti-users" aria-hidden="true"></i><span data-i18n="nav.users">Utilisateurs</span></span>
+      <span id="count-users" class="badge" style="background:rgba(34,197,94,0.12);color:var(--green)">0</span>
+    </div>
+    <div class="nav-item" id="nav-groups" data-view="groups" onclick="setView('groups',this)">
+      <span class="nav-label"><i class="ti ti-users-group" aria-hidden="true"></i><span data-i18n="nav.groups">Groupes</span></span>
+      <span id="count-groups" class="badge" style="background:rgba(168,85,247,0.15);color:#c084fc">0</span>
+    </div>
+
+    <div class="nav-section" id="nav-section-index" data-i18n="nav.index">Index</div>
+    <button class="refresh-btn" id="refresh-apt-btn" onclick="refreshIndex('apt')">
+      <i class="ti ti-refresh" aria-hidden="true"></i>
+      <span data-i18n="btn.refresh_apt">Refresh apt</span>
+    </button>
+    <button class="refresh-btn" id="refresh-cran-btn" onclick="refreshIndex('cran')">
+      <i class="ti ti-refresh" aria-hidden="true"></i>
+      <span data-i18n="btn.refresh_cran">Refresh CRAN</span>
+    </button>
+  </aside>
+
+  <main>
+    <!-- ── Vue Utilisateurs ────────────────────────────────────────────── -->
+    <div id="view-users" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+        <div>
+          <div style="font-size:15px;font-weight:600" data-i18n="users.title">Utilisateurs</div>
+          <div style="color:var(--muted);font-size:12px;margin-top:3px" data-i18n="users.desc">Comptes stockés en base (auth provider : basic). L'utilisateur <strong>anonymous</strong> (sans mot de passe) est le compte de secours utilisé quand aucun credential n'est fourni.</div>
+        </div>
+        <button id="btn-new-user" class="btn-approve" style="white-space:nowrap" onclick="openAddUser()"><i class="ti ti-user-plus"></i> <span data-i18n="users.new_user">Nouvel utilisateur</span></button>
+      </div>
+
+      <!-- Formulaire création utilisateur -->
+      <div id="user-form" style="display:none;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:1.25rem;margin-bottom:1.25rem">
+        <div id="user-form-title" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:1rem" data-i18n="users.new_user">Nouvel utilisateur</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px" data-i18n="users.form.username">Nom d'utilisateur</div>
+            <input id="uf-name" type="text" data-i18n-ph="users.form.username_ph" placeholder="ex: alice" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--font);font-size:13px;padding:7px 10px;outline:none;box-sizing:border-box">
+          </div>
+          <div id="uf-password-wrap">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px"><span data-i18n="users.form.password">Mot de passe</span> <span style="opacity:0.6" data-i18n="users.form.password_hint">(vide = compte anonymous)</span></div>
+            <input id="uf-password" type="password" data-i18n-ph="users.form.password_ph" placeholder="laisser vide pour anonymous" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--font);font-size:13px;padding:7px 10px;outline:none;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="margin-top:1rem">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px" data-i18n="nav.groups">Groupes</div>
+          <div id="uf-groups-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+          <div id="uf-groups-empty" style="display:none;font-size:12px;color:var(--muted);font-style:italic" data-i18n="users.form.no_groups">Aucun groupe configuré — créez-en dans l'onglet Groupes.</div>
+        </div>
+        <div style="margin-top:1rem">
+          <label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none">
+            <input type="checkbox" id="uf-enabled" checked>
+            <span data-i18n="users.form.enabled">Compte activé</span>
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:1rem">
+          <button id="user-form-submit" class="btn-approve" onclick="saveNewUser()" data-i18n="btn.create">Créer</button>
+          <button class="btn-reject" onclick="cancelUser()" data-i18n="btn.cancel">Annuler</button>
+        </div>
+      </div>
+
+      <!-- Modal changement de mot de passe -->
+      <div id="passwd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center">
+        <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:1.5rem;width:380px;max-width:90vw">
+          <div style="font-size:14px;font-weight:600;margin-bottom:1rem"><span data-i18n="users.passwd.title">Changer le mot de passe</span> — <span id="passwd-username"></span></div>
+          <input id="passwd-new" type="password" data-i18n-ph="users.passwd.ph" placeholder="Nouveau mot de passe" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--font);font-size:13px;padding:7px 10px;outline:none;box-sizing:border-box;margin-bottom:0.75rem">
+          <div style="display:flex;gap:8px">
+            <button class="btn-approve" onclick="savePassword()" data-i18n="btn.save">Enregistrer</button>
+            <button class="btn-reject" onclick="closePasswdModal()" data-i18n="btn.cancel">Annuler</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tableau des utilisateurs -->
+      <table>
+        <thead><tr>
+          <th data-i18n="users.table.user">Utilisateur</th>
+          <th data-i18n="col.type">Type</th>
+          <th data-i18n="nav.groups">Groupes</th>
+          <th data-i18n="users.table.status">Statut</th>
+          <th data-i18n="users.table.created">Créé le</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="users-body"></tbody>
+      </table>
+      <div id="users-empty" style="display:none;text-align:center;padding:3rem;color:var(--muted)">
+        <i class="ti ti-users" style="font-size:2rem"></i>
+        <div style="margin-top:0.5rem" data-i18n="users.empty">Aucun utilisateur.</div>
+      </div>
+    </div>
+
+    <!-- ── Vue Groupes ─────────────────────────────────────────────────── -->
+    <div id="view-groups" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+        <div>
+          <div style="font-size:15px;font-weight:600" data-i18n="groups.title">Groupes &amp; permissions</div>
+          <div style="color:var(--muted);font-size:12px;margin-top:3px" data-i18n="groups.desc">Chaque groupe définit quels dépôts sont accessibles et quelles actions sont autorisées.</div>
+        </div>
+        <button id="btn-new-group" class="btn-approve" style="white-space:nowrap" onclick="openAddGroup()"><i class="ti ti-plus"></i> <span data-i18n="groups.new_group">Nouveau groupe</span></button>
+      </div>
+
+      <!-- Formulaire création/édition groupe -->
+      <div id="group-form" style="display:none;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:1.25rem;margin-bottom:1.25rem">
+        <div id="group-form-title" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:1rem" data-i18n="groups.new_group">Nouveau groupe</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px" data-i18n="groups.form.name">Nom du groupe</div>
+            <input id="gf-name" type="text" data-i18n-ph="groups.form.name_ph" placeholder="ex: repo-r-lecture" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--font);font-size:13px;padding:7px 10px;outline:none;box-sizing:border-box">
+            <div style="font-size:11px;color:var(--muted);margin-top:6px" data-i18n="groups.form.admin_note">Le groupe <strong>admin</strong> est réservé (superadmin implicite).</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px" data-i18n="groups.form.permissions">Permissions</div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px"><input type="checkbox" id="gf-approve"> <span data-i18n="groups.form.perm_approve">Approuver / rejeter / révoquer des packages</span></label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px"><input type="checkbox" id="gf-manage"> <span data-i18n="groups.form.perm_manage">Gérer les groupes et les règles auto</span></label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="gf-refresh"> <span data-i18n="groups.form.perm_refresh">Rafraîchir les index (apt / CRAN)</span></label>
+          </div>
+        </div>
+        <div style="margin-top:1rem">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px" data-i18n="groups.form.repos">Dépôts accessibles</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 10px"><input type="checkbox" id="gf-repo-all" onchange="toggleAllRepos(this)"> <strong data-i18n="misc.all">Tous</strong></label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 10px"><input type="checkbox" class="repo-cb" value="apt"> apt</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 10px"><input type="checkbox" class="repo-cb" value="docker"> docker</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 10px"><input type="checkbox" class="repo-cb" value="npm"> npm</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 10px"><input type="checkbox" class="repo-cb" value="pip"> pip</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 10px"><input type="checkbox" class="repo-cb" value="r"> R</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 10px"><input type="checkbox" class="repo-cb" value="go"> go</label>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:1rem">
+          <button class="btn-approve" onclick="saveGroup()" data-i18n="btn.save">Enregistrer</button>
+          <button class="btn-reject" onclick="cancelGroup()" data-i18n="btn.cancel">Annuler</button>
+        </div>
+      </div>
+
+      <!-- Tableau des groupes -->
+      <table>
+        <thead><tr>
+          <th data-i18n="col.name">Nom</th>
+          <th data-i18n="col.repos">Dépôts</th>
+          <th data-i18n="col.approval">Approbation</th>
+          <th data-i18n="col.manage">Gestion</th>
+          <th data-i18n="col.refresh">Refresh index</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="groups-body"></tbody>
+      </table>
+      <div id="groups-empty" style="display:none;text-align:center;padding:3rem;color:var(--muted)">
+        <i class="ti ti-users-group" style="font-size:2rem"></i>
+        <div style="margin-top:0.5rem" data-i18n="groups.empty">Aucun groupe configuré.</div>
+      </div>
+    </div>
+
+    <!-- ── Vue Règles ──────────────────────────────────────────────────── -->
+    <div id="view-rules" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+        <div>
+          <div style="font-size:15px;font-weight:600" data-i18n="rules.title">Règles d'auto-approbation</div>
+          <div style="color:var(--muted);font-size:12px;margin-top:3px" data-i18n="rules.desc">Si toutes les règles actives sont respectées après le scan, le package est approuvé automatiquement. Sans règles → révision manuelle.</div>
+        </div>
+        <button id="btn-new-rule" class="btn-approve" style="white-space:nowrap" onclick="openAddRule()"><i class="ti ti-plus"></i> <span data-i18n="rules.new_rule">Nouvelle règle</span></button>
+      </div>
+
+      <!-- Formulaire ajout/édition -->
+      <div id="rule-form" style="display:none;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.25rem">
+        <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:0.75rem" id="rule-form-title" data-i18n="rules.new_rule">Nouvelle règle</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px" data-i18n="col.repos">Dépôt</div>
+            <select id="rf-repo" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--font);font-size:13px;padding:6px 10px;outline:none">
+              <option value="*" data-i18n="rules.form.all_repos">Tous les dépôts</option>
+              <option value="apt">apt</option>
+              <option value="docker">docker</option>
+              <option value="pip">pip</option>
+              <option value="go">go</option>
+              <option value="npm">npm</option>
+              <option value="r">r (CRAN)</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px" data-i18n="rules.form.rule_type">Type de règle</div>
+            <select id="rf-type" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--font);font-size:13px;padding:6px 10px;outline:none" onchange="updateThresholdHint()">
+              <option value="cvss_max" data-i18n="rule_type.cvss_max">CVSS max (1 vuln)</option>
+              <option value="epss_max" data-i18n="rule_type.epss_max">EPSS max (1 vuln)</option>
+              <option value="cvss_sum">Σ CVSS total</option>
+              <option value="cvss_epss_sum">Σ CVSS×EPSS total</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px"><span data-i18n="rules.form.threshold">Seuil</span> <span id="rf-hint" style="font-style:italic;opacity:0.6">(0–10)</span></div>
+            <input id="rf-threshold" type="number" step="0.01" min="0" value="7.5"
+              style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--font);font-size:13px;padding:6px 10px;outline:none">
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-approve" onclick="saveRule()"><i class="ti ti-check"></i> <span data-i18n="btn.save">Enregistrer</span></button>
+            <button class="btn-detail" onclick="cancelRule()"><i class="ti ti-x"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table des règles -->
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="col.repos">Dépôt</th>
+              <th data-i18n="rules.form.rule_type">Type de règle</th>
+              <th data-i18n="rules.form.threshold">Seuil</th>
+              <th data-i18n="col.enabled">Activée</th>
+              <th data-i18n="col.actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rules-body"></tbody>
+        </table>
+        <div id="rules-empty" class="empty" style="display:none">
+          <i class="ti ti-adjustments-off" aria-hidden="true"></i>
+          <p data-i18n="rules.empty">Aucune règle définie — tous les packages resteront en révision manuelle</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Vue Packages ──────────────────────────────────────────────────── -->
+    <div id="view-packages">
+    <div class="toolbar">
+      <div class="search">
+        <i class="ti ti-search" aria-hidden="true"></i>
+        <input type="text" id="search-input" data-i18n-ph="pkg.search_ph" placeholder="Rechercher un package…" oninput="renderTable()">
+      </div>
+      <div class="filter-group" id="type-filters">
+        <button class="chip active" data-type="all" onclick="setTypeFilter('all',this)"><i class="ti ti-apps" aria-hidden="true"></i><span data-i18n="misc.all_f">tous</span></button>
+        <button class="chip" data-type="docker" onclick="setTypeFilter('docker',this)"><i class="ti ti-brand-docker" aria-hidden="true"></i>docker</button>
+        <button class="chip" data-type="apt" onclick="setTypeFilter('apt',this)"><i class="ti ti-brand-debian" aria-hidden="true"></i>apt</button>
+        <button class="chip" data-type="npm" onclick="setTypeFilter('npm',this)"><i class="ti ti-brand-npm" aria-hidden="true"></i>npm</button>
+        <button class="chip" data-type="pip" onclick="setTypeFilter('pip',this)"><i class="ti ti-brand-python" aria-hidden="true"></i>pip</button>
+        <button class="chip" data-type="r" onclick="setTypeFilter('r',this)"><svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><text x="0" y="12" font-family="Georgia,serif" font-size="14" font-weight="700">R</text></svg>R</button>
+        <button class="chip" data-type="go" onclick="setTypeFilter('go',this)"><i class="ti ti-brand-golang" aria-hidden="true"></i>go</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="col.package">Package</th>
+            <th data-i18n="col.type">Type</th>
+            <th data-i18n="col.version">Version</th>
+            <th data-i18n="col.size">Taille</th>
+            <th data-i18n="col.requested_by">Demandé par</th>
+            <th data-i18n="col.date">Date</th>
+            <th data-i18n="col.status">Statut</th>
+            <th data-i18n="col.security">Sécurité</th>
+            <th data-i18n="col.actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+      <div id="empty-state" class="empty" style="display:none">
+        <i class="ti ti-package-off" aria-hidden="true"></i>
+        <p data-i18n="pkg.empty">Aucun package dans cette file</p>
+      </div>
+    </div>
+    </div><!-- /view-packages -->
+  </main>
+</div>
+
+<!-- Drawer -->
+<div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Détails du package">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title" id="drawer-title">—</div>
+      <div style="color:var(--muted);font-size:12px;margin-top:4px" id="drawer-sub">—</div>
+    </div>
+    <button class="drawer-close" onclick="closeDrawer()" aria-label="Fermer"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="drawer-meta" class="meta-grid"></div>
+  <div class="sha-block" id="drawer-sha"></div>
+  <div class="url-block" id="drawer-url" style="display:none"></div>
+  <div id="drawer-docker" style="display:none"></div>
+  <div id="drawer-security" style="display:none;margin-top:1rem">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:6px" data-i18n="nav.security">Sécurité</div>
+    <div id="drawer-security-content"></div>
+  </div>
+  <hr class="drawer-sep">
+  <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:6px" data-i18n="drawer.comment">Commentaire</div>
+  <textarea class="comment-area" id="drawer-comment" data-i18n-ph="drawer.comment_ph" placeholder="Raison de la décision (optionnel)…"></textarea>
+  <div class="drawer-actions" id="drawer-actions"></div>
+  <div id="drawer-history" style="display:none;margin-top:1.25rem">
+    <hr class="drawer-sep" style="margin-bottom:1rem">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:8px" data-i18n="drawer.history">Historique des décisions</div>
+    <div id="drawer-history-content" class="timeline"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" role="alert"></div>
+
+<script>
+// ── i18n ─────────────────────────────────────────────────────────────────────
+const LANG_LOCALE = { fr:'fr-FR', en:'en-US', de:'de-DE', es:'es-ES', zh:'zh-CN', ja:'ja-JP' };
+
+const TRANSLATIONS = {
+  fr: {
+    'header.pending':'en attente',
+    'nav.files':'Files','nav.pending':'En attente','nav.approved':'Approuvés','nav.rejected':'Rejetés','nav.all':'Tous',
+    'nav.security':'Sécurité','nav.auto_rules':'Règles auto','nav.admin':'Administration',
+    'nav.users':'Utilisateurs','nav.groups':'Groupes','nav.index':'Index',
+    'btn.refresh_apt':'Refresh apt','btn.refresh_cran':'Refresh CRAN',
+    'btn.create':'Créer','btn.save':'Enregistrer','btn.cancel':'Annuler','btn.logout':'Se déconnecter',
+    'users.title':'Utilisateurs',
+    'users.desc':'Comptes stockés en base (auth provider : basic). L\'utilisateur anonymous (sans mot de passe) est le compte de secours utilisé quand aucun credential n\'est fourni.',
+    'users.new_user':'Nouvel utilisateur',
+    'users.form.username':'Nom d\'utilisateur','users.form.username_ph':'ex: alice',
+    'users.form.password':'Mot de passe','users.form.password_hint':'(vide = compte anonymous)',
+    'users.form.password_ph':'laisser vide pour anonymous',
+    'users.form.enabled':'Compte activé',
+    'users.form.no_groups':'Aucun groupe configuré — créez-en dans l\'onglet Groupes.',
+    'users.passwd.title':'Changer le mot de passe','users.passwd.ph':'Nouveau mot de passe',
+    'users.table.user':'Utilisateur','users.table.created':'Créé le','users.table.status':'Statut','users.empty':'Aucun utilisateur.',
+    'users.status.active':'actif','users.status.disabled':'désactivé',
+    'users.action.enable':'Activer','users.action.disable':'Désactiver',
+    'groups.title':'Groupes & permissions',
+    'groups.desc':'Chaque groupe définit quels dépôts sont accessibles et quelles actions sont autorisées.',
+    'groups.new_group':'Nouveau groupe','groups.edit_group':'Modifier : ',
+    'groups.form.name':'Nom du groupe','groups.form.name_ph':'ex: repo-r-lecture',
+    'groups.form.admin_note':'Le groupe admin est réservé (superadmin implicite).',
+    'groups.form.permissions':'Permissions',
+    'groups.form.perm_approve':'Approuver / rejeter / révoquer des packages',
+    'groups.form.perm_manage':'Gérer les groupes et les règles auto',
+    'groups.form.perm_refresh':'Rafraîchir les index (apt / CRAN)',
+    'groups.form.repos':'Dépôts accessibles','groups.empty':'Aucun groupe configuré.',
+    'rules.title':'Règles d\'auto-approbation',
+    'rules.desc':'Si toutes les règles actives sont respectées après le scan, le package est approuvé automatiquement. Sans règles → révision manuelle.',
+    'rules.new_rule':'Nouvelle règle','rules.edit_rule':'Modifier la règle',
+    'rules.form.all_repos':'Tous les dépôts','rules.form.rule_type':'Type de règle','rules.form.threshold':'Seuil',
+    'rules.empty':'Aucune règle définie — tous les packages resteront en révision manuelle',
+    'pkg.search_ph':'Rechercher un package…','pkg.empty':'Aucun package dans cette file',
+    'drawer.comment':'Commentaire','drawer.comment_ph':'Raison de la décision (optionnel)…','drawer.history':'Historique des décisions',
+    'drawer.approve':'Approuver','drawer.reject':'Rejeter','drawer.revoke':'Révoquer','drawer.re_approve':'Ré-approuver',
+    'col.package':'Package','col.type':'Type','col.version':'Version','col.size':'Taille',
+    'col.requested_by':'Demandé par','col.date':'Date','col.status':'Statut','col.security':'Sécurité',
+    'col.actions':'Actions','col.name':'Nom','col.repos':'Dépôts','col.approval':'Approbation',
+    'col.manage':'Gestion','col.refresh':'Refresh index','col.enabled':'Activée',
+    'misc.all':'Tous','misc.all_f':'tous',
+    'meta.type':'Type','meta.status':'Statut','meta.size':'Taille','meta.content_type':'Content-Type',
+    'meta.requested_by':'Demandé par','meta.requested_at':'Demandé le','meta.reviewed_by':'Revu par','meta.reviewed_at':'Revu le',
+    'docker.pull_cmd':'Commande pull (via proxy)','docker.full_ref':'Référence complète',
+    'rule_type.cvss_max':'CVSS max (1 vuln)','rule_type.epss_max':'EPSS max (1 vuln)',
+    'rule_type.cvss_sum':'Σ CVSS total','rule_type.cvss_epss_sum':'Σ CVSS×EPSS total',
+    'threshold.cvss_max':'(0 – 10, ex: 7.5)','threshold.epss_max':'(0 – 1, ex: 0.10)',
+    'threshold.cvss_sum':'(ex: 20)','threshold.cvss_epss_sum':'(ex: 1.0)',
+    'action.approved':'Approuvé','action.rejected':'Rejeté','action.revoked':'Révoqué','action.pending':'Remis en attente',
+    'sec.pending':'Analyse en attente','sec.scanning':'Analyse en cours…','sec.error':'Erreur lors du scan',
+    'sec.clean':'Aucune vulnérabilité connue','sec.vulns':'{n} vulnérabilité(s)',
+    'epss.header':'Risque d\'exploitation réel','epss.prob':'Probabilité (30 j)','epss.percentile':'Percentile',
+    'epss.top':'Top {n}% des CVE',
+    'epss.desc.critical':'Exploitation <strong>active dans la nature</strong>. Correctif immédiat requis.',
+    'epss.desc.high':'<strong>Forte probabilité</strong> d\'exploitation observée. À corriger en priorité.',
+    'epss.desc.medium':'Probabilité <strong>modérée</strong>. Des exploits circulent.',
+    'epss.desc.low':'Probabilité <strong>faible</strong>. Peu d\'activité d\'exploitation recensée.',
+    'epss.desc.none':'Aucune exploitation connue recensée dans les données FIRST.org.',
+    'toast.approved':'Package approuvé','toast.rejected':'Package rejeté','toast.revoked':'Package révoqué',
+    'toast.copied':'Copié !','toast.copy_failed':'Copie impossible',
+    'toast.rule_created':'Règle créée','toast.rule_updated':'Règle mise à jour',
+    'toast.rule_deleted':'Règle supprimée','toast.rule_enabled':'Règle activée','toast.rule_disabled':'Règle désactivée',
+    'toast.group_created':'Groupe créé','toast.group_updated':'Groupe mis à jour','toast.group_deleted':'Groupe supprimé',
+    'toast.user_created':'Utilisateur créé','toast.user_deleted':'Utilisateur supprimé',
+    'toast.user_enabled':'Utilisateur activé','toast.user_disabled':'Utilisateur désactivé',
+    'toast.groups_updated':'Groupes mis à jour','toast.password_updated':'Mot de passe mis à jour',
+    'toast.refresh_done':'{label} rafraîchi','toast.name_required':'Le nom est requis',
+    'toast.password_empty':'Le mot de passe ne peut pas être vide',
+    'confirm.delete_rule':'Supprimer cette règle ?',
+    'confirm.delete_group':'Supprimer le groupe "{name}" ?',
+    'confirm.delete_user':'Supprimer l\'utilisateur « {name} » ?',
+    'users.action.edit_groups':'Modifier les groupes','users.action.change_password':'Changer le mot de passe',
+    'users.action.delete':'Supprimer','misc.loading':'Chargement…',
+    'misc.yes':'oui','misc.no':'non','misc.edit':'Modifier','misc.delete':'Supprimer','misc.all_repos':'Tous','misc.copy':'Copier','misc.done':'Fait','toast.error':'Erreur : ',
+    'status.pending':'pending','status.approved':'approved','status.rejected':'rejected',
+  },
+  en: {
+    'header.pending':'pending',
+    'nav.files':'Files','nav.pending':'Pending','nav.approved':'Approved','nav.rejected':'Rejected','nav.all':'All',
+    'nav.security':'Security','nav.auto_rules':'Auto rules','nav.admin':'Administration',
+    'nav.users':'Users','nav.groups':'Groups','nav.index':'Index',
+    'btn.refresh_apt':'Refresh apt','btn.refresh_cran':'Refresh CRAN',
+    'btn.create':'Create','btn.save':'Save','btn.cancel':'Cancel','btn.logout':'Sign out',
+    'users.title':'Users',
+    'users.desc':'Accounts stored in the database (auth provider: basic). The anonymous user (no password) is the fallback used when no credentials are provided.',
+    'users.new_user':'New user',
+    'users.form.username':'Username','users.form.username_ph':'e.g. alice',
+    'users.form.password':'Password','users.form.password_hint':'(empty = anonymous account)',
+    'users.form.password_ph':'leave empty for anonymous',
+    'users.form.enabled':'Account enabled',
+    'users.form.no_groups':'No groups configured — create some in the Groups tab.',
+    'users.passwd.title':'Change password','users.passwd.ph':'New password',
+    'users.table.user':'User','users.table.created':'Created','users.table.status':'Status','users.empty':'No users.',
+    'users.status.active':'active','users.status.disabled':'disabled',
+    'users.action.enable':'Enable','users.action.disable':'Disable',
+    'groups.title':'Groups & permissions',
+    'groups.desc':'Each group defines which repositories are accessible and what actions are allowed.',
+    'groups.new_group':'New group','groups.edit_group':'Edit: ',
+    'groups.form.name':'Group name','groups.form.name_ph':'e.g. repo-r-read',
+    'groups.form.admin_note':'The admin group is reserved (implicit superadmin).',
+    'groups.form.permissions':'Permissions',
+    'groups.form.perm_approve':'Approve / reject / revoke packages',
+    'groups.form.perm_manage':'Manage groups and auto rules',
+    'groups.form.perm_refresh':'Refresh indexes (apt / CRAN)',
+    'groups.form.repos':'Accessible repositories','groups.empty':'No groups configured.',
+    'rules.title':'Auto-approval rules',
+    'rules.desc':'If all active rules pass after scanning, the package is automatically approved. No rules → manual review.',
+    'rules.new_rule':'New rule','rules.edit_rule':'Edit rule',
+    'rules.form.all_repos':'All repositories','rules.form.rule_type':'Rule type','rules.form.threshold':'Threshold',
+    'rules.empty':'No rules defined — all packages will remain in manual review',
+    'pkg.search_ph':'Search for a package…','pkg.empty':'No packages in this queue',
+    'drawer.comment':'Comment','drawer.comment_ph':'Reason for decision (optional)…','drawer.history':'Decision history',
+    'drawer.approve':'Approve','drawer.reject':'Reject','drawer.revoke':'Revoke','drawer.re_approve':'Re-approve',
+    'col.package':'Package','col.type':'Type','col.version':'Version','col.size':'Size',
+    'col.requested_by':'Requested by','col.date':'Date','col.status':'Status','col.security':'Security',
+    'col.actions':'Actions','col.name':'Name','col.repos':'Repositories','col.approval':'Approval',
+    'col.manage':'Management','col.refresh':'Refresh index','col.enabled':'Enabled',
+    'misc.all':'All','misc.all_f':'all',
+    'meta.type':'Type','meta.status':'Status','meta.size':'Size','meta.content_type':'Content-Type',
+    'meta.requested_by':'Requested by','meta.requested_at':'Requested on','meta.reviewed_by':'Reviewed by','meta.reviewed_at':'Reviewed on',
+    'docker.pull_cmd':'Pull command (via proxy)','docker.full_ref':'Full reference',
+    'rule_type.cvss_max':'CVSS max (1 vuln)','rule_type.epss_max':'EPSS max (1 vuln)',
+    'rule_type.cvss_sum':'Σ CVSS total','rule_type.cvss_epss_sum':'Σ CVSS×EPSS total',
+    'threshold.cvss_max':'(0–10, e.g. 7.5)','threshold.epss_max':'(0–1, e.g. 0.10)',
+    'threshold.cvss_sum':'(e.g. 20)','threshold.cvss_epss_sum':'(e.g. 1.0)',
+    'action.approved':'Approved','action.rejected':'Rejected','action.revoked':'Revoked','action.pending':'Returned to pending',
+    'sec.pending':'Analysis pending','sec.scanning':'Scanning…','sec.error':'Scan error',
+    'sec.clean':'No known vulnerabilities','sec.vulns':'{n} vulnerability(ies)',
+    'epss.header':'Real exploitation risk','epss.prob':'Probability (30 d)','epss.percentile':'Percentile',
+    'epss.top':'Top {n}% of CVEs',
+    'epss.desc.critical':'<strong>Active exploitation in the wild</strong>. Immediate patch required.',
+    'epss.desc.high':'<strong>High probability</strong> of exploitation observed. Patch as a priority.',
+    'epss.desc.medium':'<strong>Moderate</strong> probability. Exploits are circulating.',
+    'epss.desc.low':'<strong>Low</strong> probability. Little exploitation activity recorded.',
+    'epss.desc.none':'No known exploitation recorded in FIRST.org data.',
+    'toast.approved':'Package approved','toast.rejected':'Package rejected','toast.revoked':'Package revoked',
+    'toast.copied':'Copied!','toast.copy_failed':'Copy failed',
+    'toast.rule_created':'Rule created','toast.rule_updated':'Rule updated',
+    'toast.rule_deleted':'Rule deleted','toast.rule_enabled':'Rule enabled','toast.rule_disabled':'Rule disabled',
+    'toast.group_created':'Group created','toast.group_updated':'Group updated','toast.group_deleted':'Group deleted',
+    'toast.user_created':'User created','toast.user_deleted':'User deleted',
+    'toast.user_enabled':'User enabled','toast.user_disabled':'User disabled',
+    'toast.groups_updated':'Groups updated','toast.password_updated':'Password updated',
+    'toast.refresh_done':'{label} refreshed','toast.name_required':'Name is required',
+    'toast.password_empty':'Password cannot be empty',
+    'confirm.delete_rule':'Delete this rule?',
+    'confirm.delete_group':'Delete group "{name}"?',
+    'confirm.delete_user':'Delete user "{name}"?',
+    'users.action.edit_groups':'Edit groups','users.action.change_password':'Change password',
+    'users.action.delete':'Delete','misc.loading':'Loading…',
+    'misc.yes':'yes','misc.no':'no','misc.edit':'Edit','misc.delete':'Delete','misc.all_repos':'All','misc.copy':'Copy','misc.done':'Done','toast.error':'Error: ',
+    'status.pending':'pending','status.approved':'approved','status.rejected':'rejected',
+  },
+  de: {
+    'header.pending':'ausstehend',
+    'nav.files':'Dateien','nav.pending':'Ausstehend','nav.approved':'Genehmigt','nav.rejected':'Abgelehnt','nav.all':'Alle',
+    'nav.security':'Sicherheit','nav.auto_rules':'Auto-Regeln','nav.admin':'Verwaltung',
+    'nav.users':'Benutzer','nav.groups':'Gruppen','nav.index':'Index',
+    'btn.refresh_apt':'Refresh apt','btn.refresh_cran':'Refresh CRAN',
+    'btn.create':'Erstellen','btn.save':'Speichern','btn.cancel':'Abbrechen','btn.logout':'Abmelden',
+    'users.title':'Benutzer',
+    'users.desc':'In der Datenbank gespeicherte Konten (Auth-Provider: basic). Der Benutzer anonymous (kein Passwort) wird verwendet, wenn keine Anmeldedaten angegeben werden.',
+    'users.new_user':'Neuer Benutzer',
+    'users.form.username':'Benutzername','users.form.username_ph':'z.B. alice',
+    'users.form.password':'Passwort','users.form.password_hint':'(leer = anonymes Konto)',
+    'users.form.password_ph':'leer lassen für anonym',
+    'users.form.enabled':'Konto aktiviert',
+    'users.form.no_groups':'Keine Gruppen konfiguriert — erstellen Sie welche im Reiter Gruppen.',
+    'users.passwd.title':'Passwort ändern','users.passwd.ph':'Neues Passwort',
+    'users.table.user':'Benutzer','users.table.created':'Erstellt am','users.table.status':'Status','users.empty':'Keine Benutzer.',
+    'users.status.active':'aktiv','users.status.disabled':'deaktiviert',
+    'users.action.enable':'Aktivieren','users.action.disable':'Deaktivieren',
+    'groups.title':'Gruppen & Berechtigungen',
+    'groups.desc':'Jede Gruppe legt fest, auf welche Repositories zugegriffen werden kann und welche Aktionen erlaubt sind.',
+    'groups.new_group':'Neue Gruppe','groups.edit_group':'Bearbeiten: ',
+    'groups.form.name':'Gruppenname','groups.form.name_ph':'z.B. repo-r-lesen',
+    'groups.form.admin_note':'Die Gruppe admin ist reserviert (impliziter Superadmin).',
+    'groups.form.permissions':'Berechtigungen',
+    'groups.form.perm_approve':'Pakete genehmigen / ablehnen / widerrufen',
+    'groups.form.perm_manage':'Gruppen und Auto-Regeln verwalten',
+    'groups.form.perm_refresh':'Indizes aktualisieren (apt / CRAN)',
+    'groups.form.repos':'Zugängliche Repositories','groups.empty':'Keine Gruppen konfiguriert.',
+    'rules.title':'Auto-Genehmigungsregeln',
+    'rules.desc':'Wenn alle aktiven Regeln nach dem Scan erfüllt sind, wird das Paket automatisch genehmigt. Ohne Regeln → manuelle Überprüfung.',
+    'rules.new_rule':'Neue Regel','rules.edit_rule':'Regel bearbeiten',
+    'rules.form.all_repos':'Alle Repositories','rules.form.rule_type':'Regeltyp','rules.form.threshold':'Schwellenwert',
+    'rules.empty':'Keine Regeln definiert — alle Pakete bleiben in manueller Überprüfung',
+    'pkg.search_ph':'Paket suchen…','pkg.empty':'Keine Pakete in dieser Warteschlange',
+    'drawer.comment':'Kommentar','drawer.comment_ph':'Begründung der Entscheidung (optional)…','drawer.history':'Entscheidungshistorie',
+    'drawer.approve':'Genehmigen','drawer.reject':'Ablehnen','drawer.revoke':'Widerrufen','drawer.re_approve':'Erneut genehmigen',
+    'col.package':'Paket','col.type':'Typ','col.version':'Version','col.size':'Größe',
+    'col.requested_by':'Angefordert von','col.date':'Datum','col.status':'Status','col.security':'Sicherheit',
+    'col.actions':'Aktionen','col.name':'Name','col.repos':'Repositories','col.approval':'Genehmigung',
+    'col.manage':'Verwaltung','col.refresh':'Index aktualisieren','col.enabled':'Aktiv',
+    'misc.all':'Alle','misc.all_f':'alle',
+    'meta.type':'Typ','meta.status':'Status','meta.size':'Größe','meta.content_type':'Content-Type',
+    'meta.requested_by':'Angefordert von','meta.requested_at':'Angefordert am','meta.reviewed_by':'Überprüft von','meta.reviewed_at':'Überprüft am',
+    'docker.pull_cmd':'Pull-Befehl (via Proxy)','docker.full_ref':'Vollständige Referenz',
+    'rule_type.cvss_max':'CVSS max (1 Vuln)','rule_type.epss_max':'EPSS max (1 Vuln)',
+    'rule_type.cvss_sum':'Σ CVSS gesamt','rule_type.cvss_epss_sum':'Σ CVSS×EPSS gesamt',
+    'threshold.cvss_max':'(0–10, z.B. 7.5)','threshold.epss_max':'(0–1, z.B. 0.10)',
+    'threshold.cvss_sum':'(z.B. 20)','threshold.cvss_epss_sum':'(z.B. 1.0)',
+    'action.approved':'Genehmigt','action.rejected':'Abgelehnt','action.revoked':'Widerrufen','action.pending':'Zurück in Warteschlange',
+    'sec.pending':'Analyse ausstehend','sec.scanning':'Analyse läuft…','sec.error':'Scan-Fehler',
+    'sec.clean':'Keine bekannten Schwachstellen','sec.vulns':'{n} Schwachstelle(n)',
+    'epss.header':'Reales Ausnutzungsrisiko','epss.prob':'Wahrscheinlichkeit (30 T)','epss.percentile':'Perzentil',
+    'epss.top':'Top {n}% der CVEs',
+    'epss.desc.critical':'<strong>Aktive Ausnutzung in freier Wildbahn</strong>. Sofortiger Patch erforderlich.',
+    'epss.desc.high':'<strong>Hohe Wahrscheinlichkeit</strong> der Ausnutzung. Patch mit Priorität.',
+    'epss.desc.medium':'<strong>Moderate</strong> Wahrscheinlichkeit. Exploits kursieren.',
+    'epss.desc.low':'<strong>Geringe</strong> Wahrscheinlichkeit. Kaum Ausnutzungsaktivität.',
+    'epss.desc.none':'Keine bekannte Ausnutzung in den FIRST.org-Daten verzeichnet.',
+    'toast.approved':'Paket genehmigt','toast.rejected':'Paket abgelehnt','toast.revoked':'Paket widerrufen',
+    'toast.copied':'Kopiert!','toast.copy_failed':'Kopieren fehlgeschlagen',
+    'toast.rule_created':'Regel erstellt','toast.rule_updated':'Regel aktualisiert',
+    'toast.rule_deleted':'Regel gelöscht','toast.rule_enabled':'Regel aktiviert','toast.rule_disabled':'Regel deaktiviert',
+    'toast.group_created':'Gruppe erstellt','toast.group_updated':'Gruppe aktualisiert','toast.group_deleted':'Gruppe gelöscht',
+    'toast.user_created':'Benutzer erstellt','toast.user_deleted':'Benutzer gelöscht',
+    'toast.user_enabled':'Benutzer aktiviert','toast.user_disabled':'Benutzer deaktiviert',
+    'toast.groups_updated':'Gruppen aktualisiert','toast.password_updated':'Passwort aktualisiert',
+    'toast.refresh_done':'{label} aktualisiert','toast.name_required':'Name ist erforderlich',
+    'toast.password_empty':'Passwort darf nicht leer sein',
+    'confirm.delete_rule':'Diese Regel löschen?',
+    'confirm.delete_group':'Gruppe "{name}" löschen?',
+    'confirm.delete_user':'Benutzer "{name}" löschen?',
+    'users.action.edit_groups':'Gruppen bearbeiten','users.action.change_password':'Passwort ändern',
+    'users.action.delete':'Löschen','misc.loading':'Laden…',
+    'misc.yes':'ja','misc.no':'nein','misc.edit':'Bearbeiten','misc.delete':'Löschen','misc.all_repos':'Alle','misc.copy':'Kopieren','misc.done':'Fertig','toast.error':'Fehler: ',
+    'status.pending':'ausstehend','status.approved':'genehmigt','status.rejected':'abgelehnt',
+  },
+  es: {
+    'header.pending':'pendiente',
+    'nav.files':'Archivos','nav.pending':'Pendiente','nav.approved':'Aprobados','nav.rejected':'Rechazados','nav.all':'Todos',
+    'nav.security':'Seguridad','nav.auto_rules':'Reglas auto','nav.admin':'Administración',
+    'nav.users':'Usuarios','nav.groups':'Grupos','nav.index':'Índice',
+    'btn.refresh_apt':'Refresh apt','btn.refresh_cran':'Refresh CRAN',
+    'btn.create':'Crear','btn.save':'Guardar','btn.cancel':'Cancelar','btn.logout':'Cerrar sesión',
+    'users.title':'Usuarios',
+    'users.desc':'Cuentas almacenadas en base de datos (proveedor auth: basic). El usuario anonymous (sin contraseña) se usa cuando no se proporcionan credenciales.',
+    'users.new_user':'Nuevo usuario',
+    'users.form.username':'Nombre de usuario','users.form.username_ph':'ej: alice',
+    'users.form.password':'Contraseña','users.form.password_hint':'(vacío = cuenta anónima)',
+    'users.form.password_ph':'dejar vacío para anónimo',
+    'users.form.enabled':'Cuenta activada',
+    'users.form.no_groups':'Sin grupos configurados — créelos en la pestaña Grupos.',
+    'users.passwd.title':'Cambiar contraseña','users.passwd.ph':'Nueva contraseña',
+    'users.table.user':'Usuario','users.table.created':'Creado el','users.table.status':'Estado','users.empty':'Sin usuarios.',
+    'users.status.active':'activo','users.status.disabled':'desactivado',
+    'users.action.enable':'Activar','users.action.disable':'Desactivar',
+    'groups.title':'Grupos & permisos',
+    'groups.desc':'Cada grupo define qué repositorios son accesibles y qué acciones están permitidas.',
+    'groups.new_group':'Nuevo grupo','groups.edit_group':'Editar: ',
+    'groups.form.name':'Nombre del grupo','groups.form.name_ph':'ej: repo-r-lectura',
+    'groups.form.admin_note':'El grupo admin está reservado (superadmin implícito).',
+    'groups.form.permissions':'Permisos',
+    'groups.form.perm_approve':'Aprobar / rechazar / revocar paquetes',
+    'groups.form.perm_manage':'Gestionar grupos y reglas automáticas',
+    'groups.form.perm_refresh':'Actualizar índices (apt / CRAN)',
+    'groups.form.repos':'Repositorios accesibles','groups.empty':'Sin grupos configurados.',
+    'rules.title':'Reglas de aprobación automática',
+    'rules.desc':'Si todas las reglas activas se cumplen tras el análisis, el paquete se aprueba automáticamente. Sin reglas → revisión manual.',
+    'rules.new_rule':'Nueva regla','rules.edit_rule':'Editar regla',
+    'rules.form.all_repos':'Todos los repositorios','rules.form.rule_type':'Tipo de regla','rules.form.threshold':'Umbral',
+    'rules.empty':'Sin reglas definidas — todos los paquetes permanecerán en revisión manual',
+    'pkg.search_ph':'Buscar paquete…','pkg.empty':'Sin paquetes en esta cola',
+    'drawer.comment':'Comentario','drawer.comment_ph':'Motivo de la decisión (opcional)…','drawer.history':'Historial de decisiones',
+    'drawer.approve':'Aprobar','drawer.reject':'Rechazar','drawer.revoke':'Revocar','drawer.re_approve':'Volver a aprobar',
+    'col.package':'Paquete','col.type':'Tipo','col.version':'Versión','col.size':'Tamaño',
+    'col.requested_by':'Solicitado por','col.date':'Fecha','col.status':'Estado','col.security':'Seguridad',
+    'col.actions':'Acciones','col.name':'Nombre','col.repos':'Repositorios','col.approval':'Aprobación',
+    'col.manage':'Gestión','col.refresh':'Actualizar índice','col.enabled':'Activada',
+    'misc.all':'Todos','misc.all_f':'todos',
+    'meta.type':'Tipo','meta.status':'Estado','meta.size':'Tamaño','meta.content_type':'Content-Type',
+    'meta.requested_by':'Solicitado por','meta.requested_at':'Solicitado el','meta.reviewed_by':'Revisado por','meta.reviewed_at':'Revisado el',
+    'docker.pull_cmd':'Comando pull (vía proxy)','docker.full_ref':'Referencia completa',
+    'rule_type.cvss_max':'CVSS máx (1 vuln)','rule_type.epss_max':'EPSS máx (1 vuln)',
+    'rule_type.cvss_sum':'Σ CVSS total','rule_type.cvss_epss_sum':'Σ CVSS×EPSS total',
+    'threshold.cvss_max':'(0–10, ej: 7.5)','threshold.epss_max':'(0–1, ej: 0.10)',
+    'threshold.cvss_sum':'(ej: 20)','threshold.cvss_epss_sum':'(ej: 1.0)',
+    'action.approved':'Aprobado','action.rejected':'Rechazado','action.revoked':'Revocado','action.pending':'Devuelto a pendiente',
+    'sec.pending':'Análisis pendiente','sec.scanning':'Analizando…','sec.error':'Error de escaneo',
+    'sec.clean':'Sin vulnerabilidades conocidas','sec.vulns':'{n} vulnerabilidad(es)',
+    'epss.header':'Riesgo real de explotación','epss.prob':'Probabilidad (30 d)','epss.percentile':'Percentil',
+    'epss.top':'Top {n}% de los CVEs',
+    'epss.desc.critical':'<strong>Explotación activa en la naturaleza</strong>. Parche inmediato requerido.',
+    'epss.desc.high':'<strong>Alta probabilidad</strong> de explotación observada. Parchear con prioridad.',
+    'epss.desc.medium':'Probabilidad <strong>moderada</strong>. Exploits en circulación.',
+    'epss.desc.low':'Probabilidad <strong>baja</strong>. Poca actividad de explotación registrada.',
+    'epss.desc.none':'Sin explotación conocida registrada en datos de FIRST.org.',
+    'toast.approved':'Paquete aprobado','toast.rejected':'Paquete rechazado','toast.revoked':'Paquete revocado',
+    'toast.copied':'¡Copiado!','toast.copy_failed':'Error al copiar',
+    'toast.rule_created':'Regla creada','toast.rule_updated':'Regla actualizada',
+    'toast.rule_deleted':'Regla eliminada','toast.rule_enabled':'Regla activada','toast.rule_disabled':'Regla desactivada',
+    'toast.group_created':'Grupo creado','toast.group_updated':'Grupo actualizado','toast.group_deleted':'Grupo eliminado',
+    'toast.user_created':'Usuario creado','toast.user_deleted':'Usuario eliminado',
+    'toast.user_enabled':'Usuario activado','toast.user_disabled':'Usuario desactivado',
+    'toast.groups_updated':'Grupos actualizados','toast.password_updated':'Contraseña actualizada',
+    'toast.refresh_done':'{label} actualizado','toast.name_required':'El nombre es obligatorio',
+    'toast.password_empty':'La contraseña no puede estar vacía',
+    'confirm.delete_rule':'¿Eliminar esta regla?',
+    'confirm.delete_group':'¿Eliminar el grupo "{name}"?',
+    'confirm.delete_user':'¿Eliminar el usuario "{name}"?',
+    'users.action.edit_groups':'Editar grupos','users.action.change_password':'Cambiar contraseña',
+    'users.action.delete':'Eliminar','misc.loading':'Cargando…',
+    'misc.yes':'sí','misc.no':'no','misc.edit':'Editar','misc.delete':'Eliminar','misc.all_repos':'Todos','misc.copy':'Copiar','misc.done':'Hecho','toast.error':'Error: ',
+    'status.pending':'pendiente','status.approved':'aprobado','status.rejected':'rechazado',
+  },
+  zh: {
+    'header.pending':'待处理',
+    'nav.files':'队列','nav.pending':'待处理','nav.approved':'已批准','nav.rejected':'已拒绝','nav.all':'全部',
+    'nav.security':'安全','nav.auto_rules':'自动规则','nav.admin':'管理',
+    'nav.users':'用户','nav.groups':'组','nav.index':'索引',
+    'btn.refresh_apt':'刷新 apt','btn.refresh_cran':'刷新 CRAN',
+    'btn.create':'创建','btn.save':'保存','btn.cancel':'取消','btn.logout':'退出登录',
+    'users.title':'用户',
+    'users.desc':'存储在数据库中的账户（认证提供者：basic）。anonymous 用户（无密码）在未提供凭据时作为备用账户使用。',
+    'users.new_user':'新建用户',
+    'users.form.username':'用户名','users.form.username_ph':'例如：alice',
+    'users.form.password':'密码','users.form.password_hint':'（空 = 匿名账户）',
+    'users.form.password_ph':'留空表示匿名',
+    'users.form.enabled':'账户已启用',
+    'users.form.no_groups':'未配置任何组 — 请在"组"选项卡中创建。',
+    'users.passwd.title':'更改密码','users.passwd.ph':'新密码',
+    'users.table.user':'用户','users.table.created':'创建于','users.table.status':'状态','users.empty':'暂无用户。',
+    'users.status.active':'启用','users.status.disabled':'禁用',
+    'users.action.enable':'启用','users.action.disable':'禁用',
+    'groups.title':'组与权限',
+    'groups.desc':'每个组定义可访问的仓库和允许的操作。',
+    'groups.new_group':'新建组','groups.edit_group':'编辑：',
+    'groups.form.name':'组名','groups.form.name_ph':'例如：repo-r-只读',
+    'groups.form.admin_note':'admin 组已保留（隐式超级管理员）。',
+    'groups.form.permissions':'权限',
+    'groups.form.perm_approve':'批准 / 拒绝 / 撤销包',
+    'groups.form.perm_manage':'管理组和自动规则',
+    'groups.form.perm_refresh':'刷新索引（apt / CRAN）',
+    'groups.form.repos':'可访问仓库','groups.empty':'未配置任何组。',
+    'rules.title':'自动审批规则',
+    'rules.desc':'扫描后若所有活动规则均满足，包将自动批准。无规则 → 手动审核。',
+    'rules.new_rule':'新建规则','rules.edit_rule':'编辑规则',
+    'rules.form.all_repos':'所有仓库','rules.form.rule_type':'规则类型','rules.form.threshold':'阈值',
+    'rules.empty':'未定义规则 — 所有包将保持手动审核',
+    'pkg.search_ph':'搜索包…','pkg.empty':'此队列中无包',
+    'drawer.comment':'备注','drawer.comment_ph':'决策原因（可选）…','drawer.history':'决策历史',
+    'drawer.approve':'批准','drawer.reject':'拒绝','drawer.revoke':'撤销','drawer.re_approve':'重新批准',
+    'col.package':'包名','col.type':'类型','col.version':'版本','col.size':'大小',
+    'col.requested_by':'请求者','col.date':'日期','col.status':'状态','col.security':'安全',
+    'col.actions':'操作','col.name':'名称','col.repos':'仓库','col.approval':'审批',
+    'col.manage':'管理','col.refresh':'刷新索引','col.enabled':'已启用',
+    'misc.all':'全部','misc.all_f':'全部',
+    'meta.type':'类型','meta.status':'状态','meta.size':'大小','meta.content_type':'Content-Type',
+    'meta.requested_by':'请求者','meta.requested_at':'请求时间','meta.reviewed_by':'审核者','meta.reviewed_at':'审核时间',
+    'docker.pull_cmd':'拉取命令（通过代理）','docker.full_ref':'完整引用',
+    'rule_type.cvss_max':'CVSS 最大值（单个漏洞）','rule_type.epss_max':'EPSS 最大值（单个漏洞）',
+    'rule_type.cvss_sum':'Σ CVSS 总计','rule_type.cvss_epss_sum':'Σ CVSS×EPSS 总计',
+    'threshold.cvss_max':'（0–10，例如 7.5）','threshold.epss_max':'（0–1，例如 0.10）',
+    'threshold.cvss_sum':'（例如 20）','threshold.cvss_epss_sum':'（例如 1.0）',
+    'action.approved':'已批准','action.rejected':'已拒绝','action.revoked':'已撤销','action.pending':'重新设为待处理',
+    'sec.pending':'等待分析','sec.scanning':'扫描中…','sec.error':'扫描错误',
+    'sec.clean':'无已知漏洞','sec.vulns':'{n} 个漏洞',
+    'epss.header':'实际利用风险','epss.prob':'概率（30天）','epss.percentile':'百分位数',
+    'epss.top':'前 {n}% 的 CVE',
+    'epss.desc.critical':'<strong>存在已知野外利用</strong>。需立即修补。',
+    'epss.desc.high':'<strong>被利用概率高</strong>。优先修补。',
+    'epss.desc.medium':'概率<strong>中等</strong>。漏洞利用工具已流通。',
+    'epss.desc.low':'概率<strong>较低</strong>。利用活动记录较少。',
+    'epss.desc.none':'FIRST.org 数据中未记录已知利用。',
+    'toast.approved':'包已批准','toast.rejected':'包已拒绝','toast.revoked':'包已撤销',
+    'toast.copied':'已复制！','toast.copy_failed':'复制失败',
+    'toast.rule_created':'规则已创建','toast.rule_updated':'规则已更新',
+    'toast.rule_deleted':'规则已删除','toast.rule_enabled':'规则已启用','toast.rule_disabled':'规则已禁用',
+    'toast.group_created':'组已创建','toast.group_updated':'组已更新','toast.group_deleted':'组已删除',
+    'toast.user_created':'用户已创建','toast.user_deleted':'用户已删除',
+    'toast.user_enabled':'用户已启用','toast.user_disabled':'用户已禁用',
+    'toast.groups_updated':'组已更新','toast.password_updated':'密码已更新',
+    'toast.refresh_done':'{label} 已刷新','toast.name_required':'名称为必填项',
+    'toast.password_empty':'密码不能为空',
+    'confirm.delete_rule':'删除此规则？',
+    'confirm.delete_group':'删除组"{name}"？',
+    'confirm.delete_user':'删除用户"{name}"？',
+    'users.action.edit_groups':'编辑组','users.action.change_password':'更改密码',
+    'users.action.delete':'删除','misc.loading':'加载中…',
+    'misc.yes':'是','misc.no':'否','misc.edit':'编辑','misc.delete':'删除','misc.all_repos':'全部','misc.copy':'复制','misc.done':'完成','toast.error':'错误：',
+    'status.pending':'待处理','status.approved':'已批准','status.rejected':'已拒绝',
+  },
+  ja: {
+    'header.pending':'保留中',
+    'nav.files':'キュー','nav.pending':'保留中','nav.approved':'承認済み','nav.rejected':'拒否済み','nav.all':'すべて',
+    'nav.security':'セキュリティ','nav.auto_rules':'自動ルール','nav.admin':'管理',
+    'nav.users':'ユーザー','nav.groups':'グループ','nav.index':'インデックス',
+    'btn.refresh_apt':'Refresh apt','btn.refresh_cran':'Refresh CRAN',
+    'btn.create':'作成','btn.save':'保存','btn.cancel':'キャンセル','btn.logout':'ログアウト',
+    'users.title':'ユーザー',
+    'users.desc':'データベースに保存されたアカウント（認証プロバイダー：basic）。anonymous ユーザー（パスワードなし）は、認証情報が提供されない場合のフォールバックとして使用されます。',
+    'users.new_user':'新規ユーザー',
+    'users.form.username':'ユーザー名','users.form.username_ph':'例：alice',
+    'users.form.password':'パスワード','users.form.password_hint':'（空 = 匿名アカウント）',
+    'users.form.password_ph':'匿名の場合は空白のまま',
+    'users.form.enabled':'アカウントを有効化',
+    'users.form.no_groups':'グループが設定されていません — グループタブで作成してください。',
+    'users.passwd.title':'パスワード変更','users.passwd.ph':'新しいパスワード',
+    'users.table.user':'ユーザー','users.table.created':'作成日','users.table.status':'ステータス','users.empty':'ユーザーなし。',
+    'users.status.active':'有効','users.status.disabled':'無効',
+    'users.action.enable':'有効化','users.action.disable':'無効化',
+    'groups.title':'グループと権限',
+    'groups.desc':'各グループは、アクセス可能なリポジトリと許可されるアクションを定義します。',
+    'groups.new_group':'新規グループ','groups.edit_group':'編集：',
+    'groups.form.name':'グループ名','groups.form.name_ph':'例：repo-r-読み取り',
+    'groups.form.admin_note':'admin グループは予約済みです（暗黙的スーパー管理者）。',
+    'groups.form.permissions':'権限',
+    'groups.form.perm_approve':'パッケージの承認・拒否・取り消し',
+    'groups.form.perm_manage':'グループと自動ルールの管理',
+    'groups.form.perm_refresh':'インデックスの更新（apt / CRAN）',
+    'groups.form.repos':'アクセス可能なリポジトリ','groups.empty':'グループが設定されていません。',
+    'rules.title':'自動承認ルール',
+    'rules.desc':'スキャン後にすべてのアクティブなルールが満たされると、パッケージは自動的に承認されます。ルールなし → 手動レビュー。',
+    'rules.new_rule':'新規ルール','rules.edit_rule':'ルールを編集',
+    'rules.form.all_repos':'すべてのリポジトリ','rules.form.rule_type':'ルールタイプ','rules.form.threshold':'閾値',
+    'rules.empty':'ルールが定義されていません — すべてのパッケージは手動レビューのまま',
+    'pkg.search_ph':'パッケージを検索…','pkg.empty':'このキューにパッケージはありません',
+    'drawer.comment':'コメント','drawer.comment_ph':'決定の理由（任意）…','drawer.history':'決定履歴',
+    'drawer.approve':'承認','drawer.reject':'拒否','drawer.revoke':'取り消し','drawer.re_approve':'再承認',
+    'col.package':'パッケージ','col.type':'タイプ','col.version':'バージョン','col.size':'サイズ',
+    'col.requested_by':'リクエスト者','col.date':'日付','col.status':'ステータス','col.security':'セキュリティ',
+    'col.actions':'操作','col.name':'名前','col.repos':'リポジトリ','col.approval':'承認',
+    'col.manage':'管理','col.refresh':'インデックス更新','col.enabled':'有効',
+    'misc.all':'すべて','misc.all_f':'すべて',
+    'meta.type':'タイプ','meta.status':'ステータス','meta.size':'サイズ','meta.content_type':'Content-Type',
+    'meta.requested_by':'リクエスト者','meta.requested_at':'リクエスト日時','meta.reviewed_by':'レビュー者','meta.reviewed_at':'レビュー日時',
+    'docker.pull_cmd':'Pullコマンド（プロキシ経由）','docker.full_ref':'フル参照',
+    'rule_type.cvss_max':'CVSS 最大値（1脆弱性）','rule_type.epss_max':'EPSS 最大値（1脆弱性）',
+    'rule_type.cvss_sum':'Σ CVSS 合計','rule_type.cvss_epss_sum':'Σ CVSS×EPSS 合計',
+    'threshold.cvss_max':'（0–10、例：7.5）','threshold.epss_max':'（0–1、例：0.10）',
+    'threshold.cvss_sum':'（例：20）','threshold.cvss_epss_sum':'（例：1.0）',
+    'action.approved':'承認済み','action.rejected':'拒否済み','action.revoked':'取り消し済み','action.pending':'保留に戻す',
+    'sec.pending':'分析待ち','sec.scanning':'スキャン中…','sec.error':'スキャンエラー',
+    'sec.clean':'既知の脆弱性なし','sec.vulns':'{n} 件の脆弱性',
+    'epss.header':'実際の悪用リスク','epss.prob':'確率（30日）','epss.percentile':'パーセンタイル',
+    'epss.top':'上位 {n}% の CVE',
+    'epss.desc.critical':'<strong>野外での活発な悪用</strong>が確認されています。即時パッチ適用が必要。',
+    'epss.desc.high':'悪用の<strong>高い確率</strong>が観測されています。優先的にパッチを適用してください。',
+    'epss.desc.medium':'<strong>中程度</strong>の確率。悪用コードが流通しています。',
+    'epss.desc.low':'<strong>低い</strong>確率。悪用活動の記録はほとんどありません。',
+    'epss.desc.none':'FIRST.org データに既知の悪用は記録されていません。',
+    'toast.approved':'パッケージが承認されました','toast.rejected':'パッケージが拒否されました','toast.revoked':'パッケージが取り消されました',
+    'toast.copied':'コピーしました！','toast.copy_failed':'コピー失敗',
+    'toast.rule_created':'ルールが作成されました','toast.rule_updated':'ルールが更新されました',
+    'toast.rule_deleted':'ルールが削除されました','toast.rule_enabled':'ルールが有効になりました','toast.rule_disabled':'ルールが無効になりました',
+    'toast.group_created':'グループが作成されました','toast.group_updated':'グループが更新されました','toast.group_deleted':'グループが削除されました',
+    'toast.user_created':'ユーザーが作成されました','toast.user_deleted':'ユーザーが削除されました',
+    'toast.user_enabled':'ユーザーが有効化されました','toast.user_disabled':'ユーザーが無効化されました',
+    'toast.groups_updated':'グループが更新されました','toast.password_updated':'パスワードが更新されました',
+    'toast.refresh_done':'{label} を更新しました','toast.name_required':'名前は必須です',
+    'toast.password_empty':'パスワードは空にできません',
+    'confirm.delete_rule':'このルールを削除しますか？',
+    'confirm.delete_group':'グループ "{name}" を削除しますか？',
+    'confirm.delete_user':'ユーザー "{name}" を削除しますか？',
+    'users.action.edit_groups':'グループを編集','users.action.change_password':'パスワード変更',
+    'users.action.delete':'削除','misc.loading':'読み込み中…',
+    'misc.yes':'はい','misc.no':'いいえ','misc.edit':'編集','misc.delete':'削除','misc.all_repos':'すべて','misc.copy':'コピー','misc.done':'完了','toast.error':'エラー：',
+    'status.pending':'保留中','status.approved':'承認済み','status.rejected':'拒否済み',
+  },
+};
+
+let currentLang = 'fr';
+
+function t(key, vars) {
+  const dict = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
+  let s = dict[key] ?? (TRANSLATIONS.fr[key] ?? key);
+  if (vars) Object.entries(vars).forEach(([k,v]) => { s = s.replace('{'+k+'}', v); });
+  return s;
+}
+
+function applyLang(lang) {
+  if (!TRANSLATIONS[lang]) return;
+  currentLang = lang;
+  localStorage.setItem('lang', lang);
+  document.documentElement.lang = lang;
+  const sel = document.getElementById('lang-sel');
+  if (sel) sel.value = lang;
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+
+  // Re-render dynamic content
+  renderTable();
+  if (currentView === 'rules')  renderRules();
+  if (currentView === 'groups') renderGroups();
+  if (currentView === 'users')  renderUsers();
+}
+
+function detectLang() {
+  const saved = localStorage.getItem('lang');
+  if (saved && TRANSLATIONS[saved]) return saved;
+  const nav = (navigator.language || navigator.userLanguage || 'fr').toLowerCase();
+  if (nav.startsWith('ja')) return 'ja';
+  if (nav.startsWith('zh')) return 'zh';
+  if (nav.startsWith('de')) return 'de';
+  if (nav.startsWith('es')) return 'es';
+  if (nav.startsWith('en')) return 'en';
+  return 'fr';
+}
+
+// ── i18n end ──────────────────────────────────────────────────────────────────
+
+const REPO_ICONS = {
+  go:     'ti-brand-golang',
+  docker: 'ti-brand-docker',
+  apt:    'ti-brand-debian',
+  npm:    'ti-brand-npm',
+  pip:    'ti-brand-python',
+};
+const R_SVG = `<svg width="11" height="11" viewBox="0 0 13 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><text x="0" y="12" font-family="Georgia,serif" font-size="14" font-weight="700">R</text></svg>`;
+
+function repoIconHTML(type) {
+  if (type === 'r') return R_SVG;
+  return `<i class="ti ${REPO_ICONS[type]||'ti-package'}" aria-hidden="true"></i>`;
+}
+
+let allData = [];
+let currentFilter = 'pending';
+let currentType = 'all';
+let currentDrawerId = null;
+
+async function loadData() {
+  try {
+    // Charger TOUS les packages sans filtre pour avoir les compteurs corrects
+    const res = await fetch('/admin/api/requests');
+    const data = await res.json();
+    allData = Array.isArray(data) ? data : [];
+    updateCounts();
+    renderTable();
+  } catch(e) {
+    // Données d'exemple si API inaccessible
+    allData = getSampleData();
+    updateCounts();
+    renderTable();
+  }
+}
+
+function getSampleData() {
+  return [
+    { id:'req-001', repo_type:'apt', name:'nginx', version:'1.24.0-1', size:512000, sha256:'sha256:a3f9...', content_type:'application/vnd.debian.binary-package', requested_at:'2026-05-22T09:12:00Z', requested_by:'10.0.1.42', status:'pending', url:'http://archive.ubuntu.com/ubuntu/pool/main/n/nginx/nginx_1.24.0-1_amd64.deb', cache_key:'ubuntu/pool/main/n/nginx/nginx_1.24.0-1_amd64.deb', scan_status:'done', vulnerabilities:[] },
+    { id:'req-002', repo_type:'docker', name:'library/postgres', version:'16.3', size:187000000, sha256:'sha256:d8c2...', content_type:'application/vnd.oci.image.manifest.v1+json', requested_at:'2026-05-22T09:45:00Z', requested_by:'10.0.1.55', status:'pending', url:'https://registry-1.docker.io/v2/library/postgres/manifests/16.3', cache_key:'docker/manifests/library/postgres/16.3', scan_status:'scanning', vulnerabilities:[] },
+    { id:'req-003', repo_type:'npm', name:'lodash', version:'4.17.21', size:140000, sha256:'sha256:1f2a...', content_type:'application/octet-stream', requested_at:'2026-05-22T08:30:00Z', requested_by:'10.0.1.31', status:'approved', reviewed_by:'admin', reviewed_at:'2026-05-22T08:55:00Z', comment:'Dépendance validée', url:'https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz', cache_key:'npm/tarballs/lodash/4.17.21', scan_status:'done', vulnerabilities:[
+      {id:'CVE-2021-23337',source:'OSV',severity:'HIGH',cvss:7.2,epss:0.00312,epss_percentile:0.71,title:'Command injection via template function',references:['https://nvd.nist.gov/vuln/detail/CVE-2021-23337','https://github.com/lodash/lodash/pull/5085']},
+      {id:'CVE-2020-28500',source:'Sonatype',severity:'MEDIUM',cvss:5.3,cwe:'CWE-400',epss:0.00092,epss_percentile:0.40,title:'ReDoS via toNumber/trim/trimEnd functions',references:['https://guide.sonatype.com/vulnerability/CVE-2020-28500','https://nvd.nist.gov/vuln/detail/CVE-2020-28500']},
+      {id:'CVE-2021-23337',source:'Sonatype',severity:'HIGH',cvss:7.2,cwe:'CWE-94',epss:0.00312,epss_percentile:0.71,title:'[CVE-2021-23337] CWE-94: Improper Control of Generation of Code',references:['https://guide.sonatype.com/vulnerability/CVE-2021-23337','https://nvd.nist.gov/vuln/detail/CVE-2021-23337']},
+      {id:'CVE-2026-4800',source:'Sonatype',severity:'CRITICAL',cvss:9.8,cwe:'CWE-94',epss:0.14820,epss_percentile:0.97,title:'[CVE-2026-4800] Code Injection via options.imports key names',references:['https://guide.sonatype.com/vulnerability/CVE-2026-4800','https://nvd.nist.gov/vuln/detail/CVE-2026-4800']},
+    ] },
+    { id:'req-004', repo_type:'pip', name:'requests', version:'2.28.0', size:95000, sha256:'sha256:7b3c...', content_type:'application/zip', requested_at:'2026-05-21T16:00:00Z', requested_by:'10.0.1.12', status:'rejected', reviewed_by:'admin', reviewed_at:'2026-05-21T16:30:00Z', comment:'Version vulnérable', url:'https://files.pythonhosted.org/packages/requests-2.28.0.tar.gz', cache_key:'pip/files/requests-2.28.0.tar.gz', scan_status:'done', vulnerabilities:[
+      {id:'CVE-2024-35195',source:'NVD',severity:'MEDIUM',cvss:5.6,epss:0.00041,epss_percentile:0.09,title:'Requests forwards proxy-authorization to destination servers',references:['https://nvd.nist.gov/vuln/detail/CVE-2024-35195','https://github.com/psf/requests/security/advisories/GHSA-9wx4-h78v-vm56']},
+      {id:'CVE-2023-32681',source:'OSV',severity:'MEDIUM',cvss:6.1,epss:0.00067,epss_percentile:0.28,title:'Unintended leak of Proxy-Authorization header',references:['https://nvd.nist.gov/vuln/detail/CVE-2023-32681']},
+      {id:'CVE-2024-35195',source:'Sonatype',severity:'MEDIUM',cvss:5.6,cwe:'CWE-522',epss:0.00041,epss_percentile:0.09,title:'[CVE-2024-35195] CWE-522: Insufficiently Protected Credentials',references:['https://guide.sonatype.com/vulnerability/CVE-2024-35195','https://nvd.nist.gov/vuln/detail/CVE-2024-35195']},
+    ] },
+    { id:'req-005', repo_type:'apt', name:'curl', version:'7.88.1-10', size:410000, sha256:'sha256:f7e1...', content_type:'application/vnd.debian.binary-package', requested_at:'2026-05-22T10:01:00Z', requested_by:'10.0.1.42', status:'pending', url:'http://archive.ubuntu.com/ubuntu/pool/main/c/curl/curl_7.88.1-10_amd64.deb', cache_key:'ubuntu/pool/main/c/curl/curl_7.88.1-10_amd64.deb', scan_status:'done', vulnerabilities:[
+      {id:'CVE-2023-38545',source:'NVD',severity:'CRITICAL',cvss:9.8,epss:0.94210,epss_percentile:0.99,title:'SOCKS5 heap buffer overflow',references:['https://nvd.nist.gov/vuln/detail/CVE-2023-38545','https://curl.se/docs/CVE-2023-38545.html']},
+      {id:'CVE-2023-38545',source:'Sonatype',severity:'CRITICAL',cvss:9.8,cwe:'CWE-122',epss:0.94210,epss_percentile:0.99,title:'[CVE-2023-38545] CWE-122: Heap-based Buffer Overflow in SOCKS5',references:['https://guide.sonatype.com/vulnerability/CVE-2023-38545','https://nvd.nist.gov/vuln/detail/CVE-2023-38545']},
+    ] },
+    { id:'req-006', repo_type:'r', name:'ggplot2', version:'3.5.1', size:3800000, sha256:'sha256:9d4b...', content_type:'application/x-gzip', requested_at:'2026-05-22T10:15:00Z', requested_by:'10.0.1.71', status:'pending', url:'https://cran.r-project.org/src/contrib/ggplot2_3.5.1.tar.gz', cache_key:'r/packages/ggplot2_3.5.1.tar.gz', scan_status:'done', vulnerabilities:[] },
+    { id:'req-007', repo_type:'docker', name:'library/redis', version:'7.2', size:40000000, sha256:'sha256:c1a9...', content_type:'application/vnd.docker.distribution.manifest.v2+json', requested_at:'2026-05-22T07:50:00Z', requested_by:'10.0.1.99', status:'approved', reviewed_by:'ops-team', reviewed_at:'2026-05-22T08:10:00Z', comment:'Image officielle', url:'https://registry-1.docker.io/v2/library/redis/manifests/7.2', cache_key:'docker/manifests/library/redis/7.2', scan_status:'done', vulnerabilities:[] },
+    { id:'req-008', repo_type:'go', name:'github.com/gin-gonic/gin', version:'v1.9.1', size:280000, sha256:'sha256:e3f1...', content_type:'application/zip', requested_at:'2026-05-22T11:00:00Z', requested_by:'10.0.1.88', status:'pending', url:'https://proxy.golang.org/github.com/gin-gonic/gin/@v/v1.9.1.zip', cache_key:'go/github.com/gin-gonic/gin/@v/v1.9.1.zip', scan_status:'pending', vulnerabilities:[] },
+  ];
+}
+
+function updateCounts() {
+  const all = getSampleData ? allData : allData;
+  const p = allData.filter(r=>r.status==='pending').length;
+  const a = allData.filter(r=>r.status==='approved').length;
+  const j = allData.filter(r=>r.status==='rejected').length;
+  document.getElementById('count-pending').textContent  = p;
+  document.getElementById('count-approved').textContent = a;
+  document.getElementById('count-rejected').textContent = j;
+  document.getElementById('header-pending').textContent = p;
+}
+
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  loadData();
+}
+
+function setTypeFilter(t, el) {
+  currentType = t;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+// ── Sécurité ──────────────────────────────────────────────────────────────
+const SEV_ORDER = ['CRITICAL','HIGH','MEDIUM','LOW','NONE'];
+
+// ── Score de risque = CVSS × EPSS ─────────────────────────────────────────
+
+function cvssEpssScore(v) {
+  return (v.cvss || 0) * (v.epss || 0);
+}
+
+// Somme des scores par CVE unique (dédupliqué par ID, max score retenu).
+function packageRiskScore(vulns) {
+  if (!vulns || !vulns.length) return 0;
+  const best = {};
+  for (const v of vulns) {
+    const s = cvssEpssScore(v);
+    if (best[v.id] === undefined || s > best[v.id]) best[v.id] = s;
+  }
+  return Object.values(best).reduce((a, b) => a + b, 0);
+}
+
+function fmtScore(score) {
+  if (score === 0)   return '0.000';
+  if (score >= 10)   return score.toFixed(1);
+  if (score >= 1)    return score.toFixed(2);
+  return score.toFixed(3);
+}
+
+function scoreClass(score) {
+  if (score >= 5.0) return 'rs-critical';
+  if (score >= 1.0) return 'rs-high';
+  if (score >= 0.1) return 'rs-medium';
+  return 'rs-low';
+}
+
+function riskScoreBadge(score, title) {
+  if (score === 0) return '';
+  const cls = scoreClass(score);
+  return `<span class="risk-score ${cls}" title="${title || 'Score = CVSS × EPSS'}">${fmtScore(score)}</span>`;
+}
+
+function maxSeverity(vulns) {
+  if (!vulns || !vulns.length) return null;
+  for (const s of SEV_ORDER) {
+    if (vulns.some(v => v.severity === s)) return s;
+  }
+  return 'NONE';
+}
+
+function secBadge(r) {
+  const st = r.scan_status;
+  const vulns = r.vulnerabilities || [];
+  if (!st || st === 'pending') return `<span class="sev-scanning" title="Analyse en attente">—</span>`;
+  if (st === 'scanning')       return `<span class="sev-scanning" title="Analyse en cours…">⏳</span>`;
+  if (st === 'error')          return `<span class="sev-scanning" title="Erreur de scan">⚠</span>`;
+  if (!vulns.length)           return `<span class="sev-clean" title="Aucune vulnérabilité connue">✓</span>`;
+  const sev   = maxSeverity(vulns).toLowerCase();
+  const score = packageRiskScore(vulns);
+  return `<div style="display:flex;gap:4px;align-items:center">
+    <span class="sev ${sev}" title="${vulns.length} vulnérabilité(s)">${vulns.length}</span>
+    ${riskScoreBadge(score, `Score de risque (Σ CVSS×EPSS) = ${fmtScore(score)}`)}
+  </div>`;
+}
+
+function renderDrawerSecurity(r) {
+  const el = document.getElementById('drawer-security');
+  const content = document.getElementById('drawer-security-content');
+  const st = r.scan_status;
+  const vulns = r.vulnerabilities || [];
+
+  if (!st || st === 'pending') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+
+  if (st === 'scanning') {
+    content.innerHTML = `<span class="sev-scanning">⏳ Analyse en cours…</span>`;
+    return;
+  }
+  if (st === 'error') {
+    content.innerHTML = `<span style="color:var(--amber)">⚠ Erreur lors du scan</span>`;
+    return;
+  }
+  if (!vulns.length) {
+    content.innerHTML = `<span class="sev-clean">✓ Aucune vulnérabilité connue</span>`;
+    return;
+  }
+
+  // Résumé global
+  const maxSev   = maxSeverity(vulns);
+  const sevClass = (maxSev||'NONE').toLowerCase();
+  const pkgScore = packageRiskScore(vulns);
+  const bySource = {};
+  for (const v of vulns) {
+    (bySource[v.source] = bySource[v.source]||[]).push(v);
+  }
+  const sourceSummary = Object.entries(bySource)
+    .map(([s, vs]) => `${s}: <b>${vs.length}</b>`)
+    .join(' &nbsp;·&nbsp; ');
+
+  let html = `<div class="sec-summary">
+    <span class="sev ${sevClass}">${maxSev}</span>
+    <span class="sec-summary-sep">|</span>
+    ${riskScoreBadge(pkgScore, `Score de risque global = Σ(CVSS × EPSS) par CVE unique = ${fmtScore(pkgScore)}`)}
+    <span class="sec-summary-label">${vulns.length} vuln. &nbsp;—&nbsp; ${sourceSummary}</span>
+  </div>`;
+
+  // Une section par source, triée par sévérité la plus haute
+  const sourceOrder = ['Sonatype', 'OSV', 'NVD'];
+  const sources = [...new Set(vulns.map(v => v.source))]
+    .sort((a, b) => {
+      const ai = sourceOrder.indexOf(a), bi = sourceOrder.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+
+  for (const source of sources) {
+    const svulns = [...bySource[source]].sort((a,b) =>
+      SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity));
+    const srcMax = maxSeverity(svulns);
+    html += `<div class="source-section">
+      <div class="source-header">
+        <span class="source-name">${source}</span>
+        <span class="source-count">${svulns.length}</span>
+        ${srcMax && srcMax !== 'NONE' ? `<span class="sev ${srcMax.toLowerCase()}">${srcMax}</span>` : ''}
+      </div>
+      <div class="vuln-list">${svulns.map(v => vulnCard(v)).join('')}</div>
+    </div>`;
+  }
+
+  content.innerHTML = html;
+}
+
+function epssClass(score) {
+  if (score >= 0.10) return 'epss-high';
+  if (score >= 0.01) return 'epss-medium';
+  return 'epss-low';
+}
+
+function epssBarColor(score) {
+  if (score >= 0.10) return '#f87171';
+  if (score >= 0.01) return 'var(--amber)';
+  return 'var(--muted)';
+}
+
+function epssDescription(score) {
+  if (score >= 0.50) return 'Exploitation <strong>active dans la nature</strong>. Correctif immédiat requis — ce CVE est parmi les plus exploités connus.';
+  if (score >= 0.10) return '<strong>Forte probabilité</strong> d\'exploitation observée. À corriger en priorité avant toute mise en production.';
+  if (score >= 0.01) return 'Probabilité <strong>modérée</strong>. Des exploits circulent. Planifier le correctif à court terme.';
+  if (score >  0)    return 'Probabilité <strong>faible</strong>. Peu d\'activité d\'exploitation recensée à ce jour.';
+  return 'Aucune exploitation connue recensée dans les données FIRST.org.';
+}
+
+function epssBadge(v) {
+  if (v.epss == null) return '';
+  const score = v.epss;
+  const pct   = (score * 100).toFixed(2) + '%';
+  const cls   = epssClass(score);
+  const color = epssBarColor(score);
+  const barW  = Math.min(100, score * 100 * (score >= 0.10 ? 1 : score >= 0.01 ? 10 : 100)).toFixed(1);
+  const desc  = epssDescription(score);
+
+  let percentileLine = '';
+  if (v.epss_percentile != null) {
+    const p = Math.round(v.epss_percentile * 100);
+    const top = 100 - p;
+    const pLabel = top <= 1
+      ? `<strong style="color:#f87171">Top ${top || '< 1'}% des CVE</strong>`
+      : top <= 10
+        ? `<strong style="color:var(--amber)">Top ${top}% des CVE</strong>`
+        : `Top ${top}% des CVE`;
+    percentileLine = `<div class="epss-tt-row">
+      <span class="epss-tt-label">Percentile</span>
+      <span class="epss-tt-value" style="color:${color}">P${p} — ${pLabel}</span>
+    </div>`;
+  }
+
+  return `<span class="epss-wrap">
+    <span class="epss-badge ${cls}">EPSS ${pct}</span>
+    <div class="epss-tooltip">
+      <div class="epss-tt-header"><span>EPSS</span> Risque d'exploitation réel</div>
+      <div class="epss-tt-row">
+        <span class="epss-tt-label">Probabilité (30 j)</span>
+        <span class="epss-tt-value" style="color:${color}">${pct}</span>
+      </div>
+      ${percentileLine}
+      <div class="epss-tt-bar-wrap">
+        <div class="epss-tt-bar" style="width:${barW}%;background:${color}"></div>
+      </div>
+      <div class="epss-tt-desc">${desc}</div>
+    </div>
+  </span>`;
+}
+
+function vulnCard(v) {
+  const sev   = (v.severity||'NONE').toLowerCase();
+  const score = cvssEpssScore(v);
+  const refs  = (v.references||[]).slice(0, 4).map(u => {
+    try {
+      const host = new URL(u).hostname;
+      return `<a class="vuln-ref" href="${u}" target="_blank" rel="noopener">${host}</a>`;
+    } catch { return ''; }
+  }).filter(Boolean).join('');
+  return `
+    <div class="vuln-item">
+      <div class="vuln-header">
+        <span class="sev ${sev}">${v.severity||'NONE'}</span>
+        ${v.cvss ? `<span class="cvss-score" title="CVSS ${v.cvss}">${Number(v.cvss).toFixed(1)}</span>` : ''}
+        ${v.cwe  ? `<span class="cwe-badge">${v.cwe}</span>` : ''}
+        ${epssBadge(v)}
+        ${riskScoreBadge(score, `Score CVE = CVSS ${Number(v.cvss||0).toFixed(1)} × EPSS ${((v.epss||0)*100).toFixed(2)}% = ${fmtScore(score)}`)}
+        <span class="vuln-id">${v.id}</span>
+      </div>
+      ${v.title ? `<div class="vuln-title">${v.title}</div>` : ''}
+      ${refs    ? `<div class="vuln-refs">${refs}</div>` : ''}
+    </div>`;
+}
+
+function fmtSize(b) {
+  if (b >= 1e9) return (b/1e9).toFixed(1)+' GB';
+  if (b >= 1e6) return (b/1e6).toFixed(1)+' MB';
+  if (b >= 1e3) return (b/1e3).toFixed(0)+' KB';
+  return b+' B';
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString(LANG_LOCALE[currentLang]||'fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+function renderTable() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const filtered = allData.filter(r => {
+    const matchType   = currentType === 'all' || r.repo_type === currentType;
+    const matchSearch = !q || r.name.toLowerCase().includes(q) || r.version.toLowerCase().includes(q);
+    const matchStatus = currentFilter === 'all' || r.status === currentFilter;
+    return matchType && matchSearch && matchStatus;
+  });
+
+  const tbody = document.getElementById('table-body');
+  const empty = document.getElementById('empty-state');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(r => `
+    <tr>
+      <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name}</td>
+      <td><span class="repo-pill ${r.repo_type}">${repoIconHTML(r.repo_type)}${r.repo_type}</span></td>
+      <td style="color:var(--muted);font-size:12px">${fmtVersion(r.version)}</td>
+      <td class="size-cell">${fmtSize(r.size)}</td>
+      <td><span class="requester"><i class="ti ti-device-desktop" aria-hidden="true"></i>${r.requested_by}</span></td>
+      <td class="time-cell">${fmtDate(r.requested_at)}</td>
+      <td>
+        <span class="status-pill ${r.status}">${r.status}</span>
+        ${r.reviewed_by ? `<div style="font-size:10px;color:var(--muted);margin-top:2px"><i class="ti ti-user" style="font-size:10px"></i> ${r.reviewed_by}</div>` : ''}
+      </td>
+      <td>${secBadge(r)}</td>
+      <td>
+        <div class="actions">
+          ${r.status==='pending' && myPerms.can_approve ? `
+            <button class="btn-approve action-approve" onclick="quickAction('${r.id}','approve')" title="Approuver"><i class="ti ti-check" aria-hidden="true"></i></button>
+            <button class="btn-reject action-reject"   onclick="quickAction('${r.id}','reject')"  title="Rejeter"><i class="ti ti-x" aria-hidden="true"></i></button>
+          ` : ''}
+          ${r.status==='approved' && myPerms.can_approve ? `
+            <button class="btn-reject action-revoke" onclick="quickAction('${r.id}','revoke')" title="Révoquer" style="background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:var(--amber)"><i class="ti ti-lock" aria-hidden="true"></i></button>
+          ` : ''}
+          <button class="btn-detail" onclick="openDrawer('${r.id}')" title="Détails"><i class="ti ti-dots" aria-hidden="true"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openDrawer(id) {
+  const r = allData.find(x=>x.id===id);
+  if (!r) return;
+  currentDrawerId = id;
+
+  document.getElementById('drawer-title').textContent = r.name + ':' + r.version;
+  document.getElementById('drawer-sub').textContent = r.cache_key;
+  document.getElementById('drawer-sha').innerHTML = `<span style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:0.06em">SHA-256</span><br><span>${r.sha256||'—'}</span>`;
+
+  // URL source
+  const urlEl = document.getElementById('drawer-url');
+  if (r.url) {
+    urlEl.style.display = 'flex';
+    urlEl.innerHTML = `
+      <a href="${r.url}" target="_blank" rel="noopener">${r.url}</a>
+      <button class="copy-btn" onclick="copyText('${r.url}')" title="Copier"><i class="ti ti-copy"></i></button>`;
+  } else {
+    urlEl.style.display = 'none';
+  }
+
+  // Bloc spécifique Docker
+  const dockerEl = document.getElementById('drawer-docker');
+  if (r.repo_type === 'docker') {
+    const isDigest = r.version.startsWith('sha256:');
+    const ref = isDigest ? `${r.name}@${r.version}` : `${r.name}:${r.version}`;
+    const proxyRef = `${location.host}/docker/${ref}`;
+    const pullCmd = `docker pull ${proxyRef}`;
+    dockerEl.style.display = 'block';
+    dockerEl.innerHTML = `
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:8px">${t('docker.pull_cmd')}</div>
+      <div class="pull-block">
+        <code>${pullCmd}</code>
+        <button class="copy-btn" onclick="copyText('${pullCmd}')" title="${t('misc.copy')}"><i class="ti ti-copy"></i></button>
+      </div>
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:4px">${t('docker.full_ref')}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:1.25rem;word-break:break-all">${isDigest ? r.version : '—'}</div>`;
+  } else {
+    dockerEl.style.display = 'none';
+  }
+
+  renderDrawerSecurity(r);
+
+  document.getElementById('drawer-comment').value = r.comment || '';
+
+  const meta = [
+    [t('meta.type'),         `<span class="repo-pill ${r.repo_type}">${repoIconHTML(r.repo_type)}${r.repo_type}</span>`],
+    [t('meta.status'),       `<span class="status-pill ${r.status}">${r.status}</span>`],
+    [t('meta.size'),         fmtSize(r.size)],
+    [t('meta.content_type'), r.content_type],
+    [t('meta.requested_by'), r.requested_by],
+    [t('meta.requested_at'), fmtDate(r.requested_at)],
+    [t('meta.reviewed_by'),  r.reviewed_by||'—'],
+    [t('meta.reviewed_at'),  r.reviewed_at ? fmtDate(r.reviewed_at) : '—'],
+  ];
+
+  document.getElementById('drawer-meta').innerHTML = meta.map(([l,v])=>`
+    <div class="meta-cell">
+      <div class="meta-label">${l}</div>
+      <div class="meta-value">${v}</div>
+    </div>
+  `).join('');
+
+  const acts = document.getElementById('drawer-actions');
+  if (!myPerms.can_approve) {
+    acts.innerHTML = '';
+  } else if (r.status === 'pending') {
+    acts.innerHTML = `
+      <button class="drawer-btn drawer-approve action-approve" onclick="drawerAction('approve')">
+        <i class="ti ti-circle-check" aria-hidden="true"></i> ${t('drawer.approve')}
+      </button>
+      <button class="drawer-btn drawer-reject action-reject" onclick="drawerAction('reject')">
+        <i class="ti ti-circle-x" aria-hidden="true"></i> ${t('drawer.reject')}
+      </button>`;
+  } else if (r.status === 'approved') {
+    acts.innerHTML = `
+      <button class="drawer-btn action-revoke" onclick="drawerAction('revoke')"
+        style="background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.35);color:var(--amber)">
+        <i class="ti ti-lock" aria-hidden="true"></i> ${t('drawer.revoke')}
+      </button>`;
+  } else if (r.status === 'rejected') {
+    acts.innerHTML = `
+      <button class="drawer-btn drawer-approve action-approve" onclick="drawerAction('approve')">
+        <i class="ti ti-circle-check" aria-hidden="true"></i> ${t('drawer.re_approve')}
+      </button>`;
+  } else {
+    acts.innerHTML = '';
+  }
+
+  // Charger l'historique des décisions
+  loadDrawerHistory(r.id);
+
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  currentDrawerId = null;
+}
+
+async function drawerAction(action) {
+  const comment = document.getElementById('drawer-comment').value;
+  await doAction(currentDrawerId, action, comment);
+  closeDrawer();
+}
+
+async function quickAction(id, action) {
+  await doAction(id, action, '');
+}
+
+async function doAction(id, action, comment) {
+  try {
+    const res = await fetch(`/admin/api/requests/${id}/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comment })
+    });
+    if (!res.ok) throw new Error(await res.text());
+
+    // Mettre à jour localement
+    const req = allData.find(r=>r.id===id);
+    if (req) {
+      if (action === 'approve')  req.status = 'approved';
+      else if (action === 'reject') req.status = 'rejected';
+      else if (action === 'revoke') { req.status = 'pending'; req.reviewed_by = ''; }
+      req.comment = comment;
+      req.reviewed_at = new Date().toISOString();
+    }
+    updateCounts();
+    renderTable();
+    const msgs = { approve: t('toast.approved'), reject: t('toast.rejected'), revoke: t('toast.revoked') };
+    const types = { approve: 'success', reject: 'error', revoke: 'success' };
+    showToast(msgs[action] || t('misc.done'), types[action] || 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  }
+}
+
+// ── Historique des décisions ──────────────────────────────────────────────
+function getActionLabel(action) {
+  return { approved: t('action.approved'), rejected: t('action.rejected'), revoked: t('action.revoked'), pending: t('action.pending') }[action] || action;
+}
+
+async function loadDrawerHistory(id) {
+  const el  = document.getElementById('drawer-history');
+  const cnt = document.getElementById('drawer-history-content');
+  cnt.innerHTML = `<span style="color:var(--muted);font-size:12px">${t('misc.loading')}</span>`;
+  el.style.display = 'block';
+  try {
+    const res = await fetch(`/admin/api/requests/history/${id}`);
+    const entries = await res.json();
+    if (!entries.length) {
+      el.style.display = 'none';
+      return;
+    }
+    cnt.innerHTML = entries.map((e, i) => `
+      <div class="tl-item">
+        <div class="tl-dot-wrap">
+          <div class="tl-dot ${e.action}"></div>
+          ${i < entries.length - 1 ? '<div class="tl-line"></div>' : ''}
+        </div>
+        <div class="tl-body">
+          <div class="tl-action ${e.action}">${getActionLabel(e.action)}</div>
+          <div class="tl-meta"><i class="ti ti-user" style="font-size:10px"></i> ${e.actor || '—'} &nbsp;·&nbsp; ${fmtDate(e.created_at)}</div>
+          ${e.comment ? `<div class="tl-comment">"${e.comment}"</div>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch {
+    el.style.display = 'none';
+  }
+}
+
+function fmtVersion(v) {
+  if (!v) return '—';
+  if (v.startsWith('sha256:')) return v.slice(0, 19) + '…';
+  return v;
+}
+
+async function refreshIndex(repo) {
+  const btnId = repo === 'cran' ? 'refresh-cran-btn' : 'refresh-apt-btn';
+  const url   = repo === 'cran' ? '/admin/api/index/refresh?repo=r' : '/admin/api/index/refresh?repo=apt';
+  const label = repo === 'cran' ? 'Index CRAN' : 'Index apt';
+  const btn   = document.getElementById(btnId);
+  btn.classList.add('spinning');
+  try {
+    const res = await fetch(url, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    showToast(t('toast.refresh_done', {label}), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  } finally {
+    setTimeout(()=>btn.classList.remove('spinning'), 1000);
+  }
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(
+    () => showToast(t('toast.copied'), 'success'),
+    () => showToast(t('toast.copy_failed'), 'error')
+  );
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  setTimeout(()=>t.classList.remove('show'), 2800);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeDrawer(); cancelRule(); cancelGroup(); }
+});
+
+// ── Permissions utilisateur courant ───────────────────────────────────────
+let myPerms = { is_admin: true, all_repos: true, can_approve: true, can_manage: true, can_refresh_index: true };
+
+async function loadMyPerms() {
+  try {
+    const res = await fetch('/admin/api/me');
+    if (!res.ok) return;
+    const data = await res.json();
+    myPerms = data.permissions || myPerms;
+    if (data.username) {
+      document.getElementById('header-username').textContent = data.username;
+      document.getElementById('header-user').style.display = 'flex';
+    }
+    applyPermissions();
+  } catch {}
+}
+
+function logout() {
+  // Envoi d'une requête XHR avec credentials invalides pour effacer le cache Basic Auth du
+  // navigateur. Le middleware d'auth retourne 401 + WWW-Authenticate, ce qui force le navigateur
+  // à redemander des credentials à la prochaine navigation.
+  const xhr = new XMLHttpRequest();
+  xhr.open('GET', '/admin/api/me', true, 'logout', 'logout');
+  xhr.onloadend = () => window.location.replace('/admin/');
+  xhr.onerror   = () => window.location.replace('/admin/');
+  xhr.send();
+}
+
+function applyPermissions() {
+  const show = v => v ? '' : 'none';
+
+  // Approve/reject/revoke — seulement si can_approve
+  document.querySelectorAll('.action-approve, .action-reject, .action-revoke').forEach(el => {
+    el.style.display = show(myPerms.can_approve);
+  });
+
+  // Section Sécurité + Règles auto — seulement si can_manage
+  document.getElementById('nav-section-security').style.display = show(myPerms.can_manage);
+  document.getElementById('nav-rules').style.display            = show(myPerms.can_manage);
+  const btnNR = document.getElementById('btn-new-rule');
+  if (btnNR) btnNR.style.display = show(myPerms.can_manage);
+
+  // Section Administration (Utilisateurs + Groupes) — seulement si can_manage
+  document.getElementById('nav-section-admin').style.display = show(myPerms.can_manage);
+  document.getElementById('nav-users').style.display         = show(myPerms.can_manage);
+  document.getElementById('nav-groups').style.display        = show(myPerms.can_manage);
+  const btnNG = document.getElementById('btn-new-group');
+  if (btnNG) btnNG.style.display = show(myPerms.can_manage);
+  const btnNU = document.getElementById('btn-new-user');
+  if (btnNU) btnNU.style.display = show(myPerms.can_manage);
+
+  // Section Index + boutons refresh — seulement si can_refresh_index
+  document.getElementById('nav-section-index').style.display  = show(myPerms.can_refresh_index);
+  document.getElementById('refresh-apt-btn').style.display    = show(myPerms.can_refresh_index);
+  document.getElementById('refresh-cran-btn').style.display   = show(myPerms.can_refresh_index);
+
+  // Chips de filtre par type de dépôt — masquer les repos non accessibles
+  if (!myPerms.all_repos && Array.isArray(myPerms.repos) && myPerms.repos.length > 0) {
+    document.querySelectorAll('#type-filters .chip[data-type]').forEach(chip => {
+      const t = chip.dataset.type;
+      if (t === 'all') return;
+      chip.style.display = myPerms.repos.includes(t) ? '' : 'none';
+    });
+  }
+}
+
+// ── Gestion des vues (packages / règles / groupes) ────────────────────────
+let currentView = 'packages';
+
+function setView(view, el) {
+  currentView = view;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('view-packages').style.display = view === 'packages' ? '' : 'none';
+  document.getElementById('view-rules').style.display    = view === 'rules'    ? '' : 'none';
+  document.getElementById('view-groups').style.display   = view === 'groups'   ? '' : 'none';
+  document.getElementById('view-users').style.display    = view === 'users'    ? '' : 'none';
+  if (view === 'rules')  loadRules();
+  if (view === 'groups') loadGroups();
+  if (view === 'users')  loadUsers();
+}
+
+// ── Règles ────────────────────────────────────────────────────────────────
+let allRules = [];
+let editingRuleId = null;
+
+function getRuleLabel(type) {
+  return { cvss_max: t('rule_type.cvss_max'), epss_max: t('rule_type.epss_max'), cvss_sum: t('rule_type.cvss_sum'), cvss_epss_sum: t('rule_type.cvss_epss_sum') }[type] || type;
+}
+
+function getThresholdHint(type) {
+  return { cvss_max: t('threshold.cvss_max'), epss_max: t('threshold.epss_max'), cvss_sum: t('threshold.cvss_sum'), cvss_epss_sum: t('threshold.cvss_epss_sum') }[type] || '';
+}
+
+function updateThresholdHint() {
+  const type = document.getElementById('rf-type').value;
+  document.getElementById('rf-hint').textContent = getThresholdHint(type);
+}
+
+async function loadRules() {
+  try {
+    const res = await fetch('/admin/api/rules');
+    allRules = await res.json();
+  } catch { allRules = []; }
+  renderRules();
+  document.getElementById('count-rules').textContent = allRules.length;
+}
+
+function renderRules() {
+  const tbody = document.getElementById('rules-body');
+  const empty = document.getElementById('rules-empty');
+  if (!allRules.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = allRules.map(r => `
+    <tr>
+      <td><span class="repo-pill ${r.repo_type === '*' ? '' : r.repo_type}">${r.repo_type === '*' ? '<i class="ti ti-globe"></i> tous' : repoIconHTML(r.repo_type) + r.repo_type}</span></td>
+      <td style="color:var(--text)">${getRuleLabel(r.rule_type)}</td>
+      <td style="font-weight:600;color:var(--accent)">${r.threshold}</td>
+      <td>
+        <label style="display:inline-flex;align-items:center;gap:6px;${myPerms.can_manage ? 'cursor:pointer' : ''}">
+          <input type="checkbox" ${r.enabled ? 'checked' : ''} ${myPerms.can_manage ? `onchange="toggleRule(${r.id}, this.checked)"` : 'disabled'}
+            style="width:15px;height:15px;accent-color:var(--accent);${myPerms.can_manage ? 'cursor:pointer' : ''}">
+          <span style="font-size:12px;color:var(--muted)">${r.enabled ? t('misc.yes') : t('misc.no')}</span>
+        </label>
+      </td>
+      <td>
+        ${myPerms.can_manage ? `<div class="actions">
+          <button class="btn-detail" onclick="openEditRule(${r.id})" title="${t('misc.edit')}"><i class="ti ti-pencil"></i></button>
+          <button class="btn-reject"  onclick="deleteRule(${r.id})"  title="${t('misc.delete')}"><i class="ti ti-trash"></i></button>
+        </div>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openAddRule() {
+  editingRuleId = null;
+  document.getElementById('rule-form-title').textContent = t('rules.new_rule');
+  document.getElementById('rf-repo').value = '*';
+  document.getElementById('rf-type').value = 'cvss_max';
+  document.getElementById('rf-threshold').value = '7.5';
+  updateThresholdHint();
+  document.getElementById('rule-form').style.display = '';
+}
+
+function openEditRule(id) {
+  const r = allRules.find(x => x.id === id);
+  if (!r) return;
+  editingRuleId = id;
+  document.getElementById('rule-form-title').textContent = t('rules.edit_rule');
+  document.getElementById('rf-repo').value = r.repo_type;
+  document.getElementById('rf-type').value = r.rule_type;
+  document.getElementById('rf-threshold').value = r.threshold;
+  updateThresholdHint();
+  document.getElementById('rule-form').style.display = '';
+}
+
+function cancelRule() {
+  editingRuleId = null;
+  document.getElementById('rule-form').style.display = 'none';
+}
+
+async function saveRule() {
+  const rule = {
+    repo_type:  document.getElementById('rf-repo').value,
+    rule_type:  document.getElementById('rf-type').value,
+    threshold:  parseFloat(document.getElementById('rf-threshold').value),
+    enabled:    true,
+  };
+  try {
+    let res;
+    if (editingRuleId) {
+      res = await fetch(`/admin/api/rules/${editingRuleId}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({...rule, id: editingRuleId}),
+      });
+    } else {
+      res = await fetch('/admin/api/rules', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(rule),
+      });
+    }
+    if (!res.ok) throw new Error(await res.text());
+    cancelRule();
+    await loadRules();
+    showToast(editingRuleId ? t('toast.rule_updated') : t('toast.rule_created'), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  }
+}
+
+async function toggleRule(id, enabled) {
+  const r = allRules.find(x => x.id === id);
+  if (!r) return;
+  try {
+    const res = await fetch(`/admin/api/rules/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({...r, enabled}),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    r.enabled = enabled;
+    renderRules();
+    showToast(enabled ? t('toast.rule_enabled') : t('toast.rule_disabled'), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+    await loadRules();
+  }
+}
+
+async function deleteRule(id) {
+  if (!confirm(t('confirm.delete_rule'))) return;
+  try {
+    const res = await fetch(`/admin/api/rules/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    await loadRules();
+    showToast(t('toast.rule_deleted'), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  }
+}
+
+// ── Groupes ───────────────────────────────────────────────────────────────
+let allGroups = [];
+let editingGroupName = null;
+
+const ALL_REPOS = ['apt','docker','npm','pip','r','go'];
+
+async function loadGroups() {
+  try {
+    const res = await fetch('/admin/api/groups');
+    allGroups = await res.json();
+  } catch { allGroups = []; }
+  renderGroups();
+  document.getElementById('count-groups').textContent = allGroups.length;
+}
+
+function renderGroups() {
+  const tbody = document.getElementById('groups-body');
+  const empty = document.getElementById('groups-empty');
+  if (!allGroups.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  const tick = ok => ok
+    ? `<span style="color:var(--green)"><i class="ti ti-check"></i></span>`
+    : `<span style="color:var(--muted)"><i class="ti ti-minus"></i></span>`;
+
+  tbody.innerHTML = allGroups.map(g => {
+    const repos = g.repos.includes('*') ? `<span style="color:var(--accent)">${t('misc.all')}</span>`
+      : (g.repos.length ? g.repos.map(r=>`<span class="repo-pill ${r}" style="font-size:11px;padding:1px 6px">${r}</span>`).join(' ') : '<span style="color:var(--muted)">—</span>');
+    const actions = myPerms.can_manage
+      ? `<button class="btn-icon" title="${t('misc.edit')}" onclick="openEditGroup('${g.name}')"><i class="ti ti-edit"></i></button>
+         <button class="btn-icon" title="${t('misc.delete')}" onclick="deleteGroup('${g.name}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>`
+      : '';
+    return `<tr>
+      <td><strong>${g.name}</strong></td>
+      <td>${repos}</td>
+      <td style="text-align:center">${tick(g.can_approve)}</td>
+      <td style="text-align:center">${tick(g.can_manage)}</td>
+      <td style="text-align:center">${tick(g.can_refresh_index)}</td>
+      <td style="text-align:right">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleAllRepos(cb) {
+  document.querySelectorAll('.repo-cb').forEach(c => { c.checked = cb.checked; c.disabled = cb.checked; });
+}
+
+function openAddGroup() {
+  editingGroupName = null;
+  document.getElementById('group-form-title').textContent = t('groups.new_group');
+  document.getElementById('gf-name').value = '';
+  document.getElementById('gf-name').disabled = false;
+  document.getElementById('gf-approve').checked = false;
+  document.getElementById('gf-manage').checked = false;
+  document.getElementById('gf-refresh').checked = false;
+  document.getElementById('gf-repo-all').checked = false;
+  document.querySelectorAll('.repo-cb').forEach(c => { c.checked = false; c.disabled = false; });
+  document.getElementById('group-form').style.display = '';
+}
+
+function openEditGroup(name) {
+  const g = allGroups.find(x => x.name === name);
+  if (!g) return;
+  editingGroupName = name;
+  document.getElementById('group-form-title').textContent = t('groups.edit_group') + ' : ' + name;
+  document.getElementById('gf-name').value = name;
+  document.getElementById('gf-name').disabled = true;
+  document.getElementById('gf-approve').checked = g.can_approve;
+  document.getElementById('gf-manage').checked = g.can_manage;
+  document.getElementById('gf-refresh').checked = g.can_refresh_index;
+  const allR = g.repos.includes('*');
+  document.getElementById('gf-repo-all').checked = allR;
+  document.querySelectorAll('.repo-cb').forEach(c => {
+    c.checked = allR || g.repos.includes(c.value);
+    c.disabled = allR;
+  });
+  document.getElementById('group-form').style.display = '';
+}
+
+function cancelGroup() {
+  document.getElementById('group-form').style.display = 'none';
+  editingGroupName = null;
+}
+
+async function saveGroup() {
+  const name = editingGroupName || document.getElementById('gf-name').value.trim();
+  if (!name) { showToast(t('toast.name_required'), 'error'); return; }
+
+  const allR = document.getElementById('gf-repo-all').checked;
+  const repos = allR ? ['*'] : Array.from(document.querySelectorAll('.repo-cb:checked')).map(c=>c.value);
+
+  const payload = {
+    name,
+    repos,
+    can_approve:       document.getElementById('gf-approve').checked,
+    can_manage:        document.getElementById('gf-manage').checked,
+    can_refresh_index: document.getElementById('gf-refresh').checked,
+  };
+
+  try {
+    let res;
+    if (editingGroupName) {
+      res = await fetch(`/admin/api/groups/${name}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    } else {
+      res = await fetch('/admin/api/groups', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    }
+    if (!res.ok) throw new Error(await res.text());
+    cancelGroup();
+    await loadGroups();
+    showToast(editingGroupName ? t('toast.group_updated') : t('toast.group_created'), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  }
+}
+
+async function deleteGroup(name) {
+  if (!confirm(t('confirm.delete_group', {name}))) return;
+  try {
+    const res = await fetch(`/admin/api/groups/${name}`, { method:'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    await loadGroups();
+    showToast(t('toast.group_deleted'), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  }
+}
+
+// ── Utilisateurs ─────────────────────────────────────────────────────────
+let allUsers = [];
+let passwdTarget = null;
+
+async function loadUsers() {
+  try {
+    const res = await fetch('/admin/api/users');
+    if (!res.ok) { allUsers = []; }
+    else allUsers = await res.json();
+  } catch { allUsers = []; }
+  renderUsers();
+  document.getElementById('count-users').textContent = allUsers.length;
+}
+
+function renderUsers() {
+  const tbody = document.getElementById('users-body');
+  const empty = document.getElementById('users-empty');
+  if (!allUsers.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = allUsers.map(u => {
+    const typeBadge = u.is_anonymous
+      ? `<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.15);color:var(--amber)">anonymous</span>`
+      : `<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(34,197,94,0.12);color:var(--green)">normal</span>`;
+    const groups = u.groups && u.groups.length
+      ? u.groups.map(g => `<span style="font-size:11px;background:rgba(59,130,246,0.1);color:#93c5fd;padding:1px 6px;border-radius:4px">${g}</span>`).join(' ')
+      : '<span style="color:var(--muted)">—</span>';
+    const date = u.created_at ? new Date(u.created_at).toLocaleDateString(LANG_LOCALE[currentLang]||'fr-FR') : '—';
+    const isAdmin = u.username === 'admin';
+    const enabled = u.enabled !== false; // true par défaut si absent
+    const statusBadge = enabled
+      ? `<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(34,197,94,0.12);color:var(--green)">${t('users.status.active')}</span>`
+      : `<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(100,116,139,0.15);color:var(--muted)">${t('users.status.disabled')}</span>`;
+    const toggleBtn = myPerms.can_manage && !isAdmin
+      ? (enabled
+          ? `<button class="btn-icon" title="${t('users.action.disable')}" onclick="toggleUser('${u.username}',false)"><i class="ti ti-toggle-right" style="color:var(--green)"></i></button>`
+          : `<button class="btn-icon" title="${t('users.action.enable')}"  onclick="toggleUser('${u.username}',true)"><i class="ti ti-toggle-left"  style="color:var(--muted)"></i></button>`)
+      : '';
+    const actions = myPerms.can_manage ? `
+      ${toggleBtn}
+      <button class="btn-icon" title="${t('users.action.edit_groups')}" onclick="openEditUserGroups('${u.username}')"><i class="ti ti-edit"></i></button>
+      ${!u.is_anonymous ? `<button class="btn-icon" title="${t('users.action.change_password')}" onclick="openPasswdModal('${u.username}')"><i class="ti ti-key"></i></button>` : ''}
+      ${!isAdmin ? `<button class="btn-icon" title="${t('misc.delete')}" onclick="deleteUser('${u.username}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>` : ''}
+    ` : '';
+    return `<tr>
+      <td><strong>${u.username}</strong></td>
+      <td>${typeBadge}</td>
+      <td>${groups}</td>
+      <td>${statusBadge}</td>
+      <td style="color:var(--muted);font-size:12px">${date}</td>
+      <td style="text-align:right">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openAddUser() {
+  document.getElementById('uf-name').value = '';
+  document.getElementById('uf-password').value = '';
+  document.getElementById('uf-enabled').checked = true;
+  renderUserGroupPicker([]);
+  document.getElementById('user-form').style.display = '';
+}
+
+function renderUserGroupPicker(selected) {
+  const container = document.getElementById('uf-groups-list');
+  const empty = document.getElementById('uf-groups-empty');
+  // Groupes disponibles : admin (toujours) + groupes de la DB
+  const available = ['admin', ...allGroups.map(g => g.name)];
+  if (!available.length) { container.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  container.innerHTML = available.map(name => {
+    const checked = selected.includes(name) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 10px">
+      <input type="checkbox" class="uf-group-cb" value="${name}" ${checked}> ${name}
+    </label>`;
+  }).join('');
+}
+
+function cancelUser() {
+  editGroupsTarget = null;
+  document.getElementById('user-form').style.display = 'none';
+  document.getElementById('uf-name').disabled = false;
+  document.getElementById('uf-password').closest('div').style.display = '';
+  document.getElementById('uf-enabled').checked = true;
+  const btn = document.querySelector('#user-form .btn-approve');
+  btn.textContent = t('btn.create');
+  btn.onclick = saveNewUser;
+}
+
+async function toggleUser(username, enabled) {
+  try {
+    const res = await fetch(`/admin/api/users/${encodeURIComponent(username)}/enabled`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    showToast(enabled ? t('toast.user_enabled') : t('toast.user_disabled'), 'success');
+    await loadUsers();
+  } catch(e) { showToast(t('toast.error') + e.message, 'error'); }
+}
+
+async function saveNewUser() {
+  const username = document.getElementById('uf-name').value.trim();
+  if (!username) { showToast(t('toast.name_required'), 'error'); return; }
+  const password = document.getElementById('uf-password').value;
+  const groups   = Array.from(document.querySelectorAll('.uf-group-cb:checked')).map(c => c.value);
+  const enabled  = document.getElementById('uf-enabled').checked;
+
+  try {
+    const res = await fetch('/admin/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, groups, enabled }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    await loadUsers();
+    cancelUser();
+    showToast(t('toast.user_created'), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  }
+}
+
+let editGroupsTarget = null;
+
+function openEditUserGroups(username) {
+  const u = allUsers.find(x => x.username === username);
+  if (!u) return;
+  editGroupsTarget = username;
+  renderUserGroupPicker(u.groups || []);
+  document.getElementById('uf-enabled').checked = u.enabled !== false;
+  document.getElementById('user-form').style.display = '';
+  document.getElementById('uf-name').value = username;
+  document.getElementById('uf-name').disabled = true;
+  document.getElementById('uf-password').closest('div').style.display = 'none';
+  document.querySelector('#user-form .btn-approve').textContent = t('btn.save');
+  document.querySelector('#user-form .btn-approve').onclick = saveEditUserGroups;
+}
+
+async function saveEditUserGroups() {
+  const groups  = Array.from(document.querySelectorAll('.uf-group-cb:checked')).map(c => c.value);
+  const enabled = document.getElementById('uf-enabled').checked;
+  try {
+    const [resGroups, resEnabled] = await Promise.all([
+      fetch(`/admin/api/users/${editGroupsTarget}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groups }),
+      }),
+      fetch(`/admin/api/users/${editGroupsTarget}/enabled`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      }),
+    ]);
+    if (!resGroups.ok)  throw new Error(await resGroups.text());
+    if (!resEnabled.ok) throw new Error(await resEnabled.text());
+    cancelUser();
+    await loadUsers();
+    showToast(t('toast.groups_updated'), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  }
+}
+
+function openPasswdModal(username) {
+  passwdTarget = username;
+  document.getElementById('passwd-username').textContent = username;
+  document.getElementById('passwd-new').value = '';
+  const modal = document.getElementById('passwd-modal');
+  modal.style.display = 'flex';
+}
+
+function closePasswdModal() {
+  document.getElementById('passwd-modal').style.display = 'none';
+  passwdTarget = null;
+}
+
+async function savePassword() {
+  const password = document.getElementById('passwd-new').value;
+  if (!password) { showToast(t('toast.password_empty'), 'error'); return; }
+  try {
+    const res = await fetch(`/admin/api/users/${passwdTarget}/password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    closePasswdModal();
+    showToast(t('toast.password_updated'), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  }
+}
+
+async function deleteUser(username) {
+  if (!confirm(t('confirm.delete_user', {name: username}))) return;
+  try {
+    const res = await fetch(`/admin/api/users/${username}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    await loadUsers();
+    showToast(t('toast.user_deleted'), 'success');
+  } catch(e) {
+    showToast(t('toast.error') + e.message, 'error');
+  }
+}
+
+async function init() {
+  applyLang(detectLang());
+  await loadMyPerms();
+  loadData();
+  if (myPerms.can_manage) {
+    loadRules();
+    loadGroups();
+    loadUsers();
+  }
+  setInterval(loadData, 30000);
+}
+init();
+</script>
+</body>
+</html>

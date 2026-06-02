@@ -1,0 +1,27 @@
+# Binaire compilé
+multirepo-proxy
+
+# Configuration locale (contient potentiellement des secrets)
+config.yaml
+
+# Répertoire de données local
+var/
+
+# Artefacts Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Cache Go
+go/pkg/
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

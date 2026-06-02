@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quarantine — Package Approval</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d0f12;
+    --surface:  #161a1f;
+    --surface2: #1e2329;
+    --border:   rgba(255,255,255,0.07);
+    --border2:  rgba(255,255,255,0.13);
+    --text:     #e8eaed;
+    --muted:    #7c8493;
+    --accent:   #3b82f6;
+    --green:    #22c55e;
+    --red:      #ef4444;
+    --amber:    #f59e0b;
+    --tag-bg:   rgba(59,130,246,0.12);
+    --tag-text: #93c5fd;
+    --font: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+  .logo i { color: var(--accent); font-size: 18px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  /* ── Badge counts ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-pending  { background: rgba(245,158,11,0.2); color: var(--amber); }
+  .badge-approved { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-rejected { background: rgba(239,68,68,0.15); color: var(--red); }
+
+  /* ── Layout ── */
+  .layout {
+    display: flex;
+    height: calc(100vh - 52px);
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    width: 200px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 0;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 1.25rem;
+    cursor: pointer;
+    color: var(--muted);
+    border-left: 2px solid transparent;
+    transition: all 0.12s;
+    user-select: none;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface); }
+  .nav-item.active { color: var(--text); border-left-color: var(--accent); background: var(--surface); }
+  .nav-item .nav-label { display: flex; align-items: center; gap: 8px; }
+  .nav-item i { font-size: 15px; }
+  .nav-section {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 1.5rem 1.25rem 0.5rem;
+    opacity: 0.6;
+  }
+  .refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 1rem 1.25rem 0;
+    padding: 7px 12px;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12px;
+    transition: all 0.12s;
+    width: calc(100% - 2.5rem);
+  }
+  .refresh-btn:hover { color: var(--text); border-color: var(--accent); }
+  .refresh-btn.spinning i { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Main ── */
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.25rem;
+  }
+  .search {
+    flex: 1;
+    max-width: 320px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0 12px;
+    height: 34px;
+  }
+  .search i { color: var(--muted); font-size: 15px; }
+  .search input {
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    width: 100%;
+  }
+  .search input::placeholder { color: var(--muted); }
+
+  .filter-group { display: flex; gap: 6px; }
+  .chip {
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12px;
+    transition: all 0.12s;
+  }
+  .chip:hover { border-color: var(--border2); color: var(--text); }
+  .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.08); }
+
+  /* ── Table ── */
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--surface); }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+  td {
+    padding: 11px 14px;
+    vertical-align: middle;
+    color: var(--text);
+  }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ── Repo type pill ── */
+  .repo-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+  }
+  .repo-pill.docker { background: rgba(30,144,255,0.12); color: #60a5fa; }
+  .repo-pill.apt    { background: rgba(234,179,8,0.12);  color: #fbbf24; }
+  .repo-pill.npm    { background: rgba(239,68,68,0.12);  color: #f87171; }
+  .repo-pill.pip    { background: rgba(34,197,94,0.12);  color: #4ade80; }
+  .repo-pill.r      { background: rgba(168,85,247,0.12); color: #c084fc; }
+  .repo-pill.go     { background: rgba(0,173,216,0.12);   color: #22d3ee; }
+
+  /* ── Status pill ── */
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .status-pill::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+  .status-pill.pending  { background: rgba(245,158,11,0.12); color: var(--amber); }
+  .status-pill.pending::before  { background: var(--amber); }
+  .status-pill.approved { background: rgba(34,197,94,0.12);  color: var(--green); }
+  .status-pill.approved::before { background: var(--green); }
+  .status-pill.rejected { background: rgba(239,68,68,0.12);  color: var(--red); }
+  .status-pill.rejected::before { background: var(--red); }
+
+  /* ── Action buttons ── */
+  .actions { display: flex; gap: 6px; align-items: center; }
+  .btn-approve, .btn-reject, .btn-detail {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-family: var(--font);
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.12s;
+  }
+  .btn-approve {
+    background: rgba(34,197,94,0.1);
+    border-color: rgba(34,197,94,0.3);
+    color: var(--green);
+  }
+  .btn-approve:hover { background: rgba(34,197,94,0.2); }
+  .btn-reject {
+    background: rgba(239,68,68,0.1);
+    border-color: rgba(239,68,68,0.3);
+    color: var(--red);
+  }
+  .btn-reject:hover { background: rgba(239,68,68,0.2); }
+  .btn-detail {
+    background: none;
+    border-color: var(--border2);
+    color: var(--muted);
+  }
+  .btn-detail:hover { color: var(--text); border-color: var(--border2); }
+
+  /* ── Detail panel (drawer) ── */
+  .drawer-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 200;
+  }
+  .drawer-overlay.open { display: block; }
+  .drawer {
+    position: fixed;
+    top: 0; right: 0;
+    width: 460px;
+    height: 100vh;
+    background: var(--surface);
+    border-left: 1px solid var(--border2);
+    z-index: 201;
+    transform: translateX(100%);
+    transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+  }
+  .drawer-title { font-size: 15px; font-weight: 600; }
+  .drawer-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 2px;
+    line-height: 1;
+  }
+  .drawer-close:hover { color: var(--text); }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+  }
+  .meta-cell {
+    background: var(--bg);
+    padding: 10px 12px;
+  }
+  .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 3px; }
+  .meta-value { font-size: 13px; color: var(--text); word-break: break-all; }
+  .sha-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 1.25rem;
+    font-size: 11px;
+    color: var(--muted);
+    word-break: break-all;
+  }
+  .sha-block span { color: var(--accent); }
+  .comment-area {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    resize: vertical;
+    min-height: 80px;
+    margin-bottom: 1rem;
+    outline: none;
+  }
+  .comment-area:focus { border-color: var(--border2); }
+  .drawer-actions { display: flex; gap: 8px; }
+  .drawer-btn {
+    flex: 1;
+    padding: 9px;
+    border-radius: 6px;
+    font-family: var(--font);
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid;
+    transition: all 0.12s;
+    font-weight: 500;
+  }
+  .drawer-approve {
+    background: rgba(34,197,94,0.12);
+    border-color: rgba(34,197,94,0.35);
+    color: var(--green);
+  }
+  .drawer-approve:hover { background: rgba(34,197,94,0.22); }
+  .drawer-reject {
+    background: rgba(239,68,68,0.1);
+    border-color: rgba(239,68,68,0.3);
+    color: var(--red);
+  }
+  .drawer-reject:hover { background: rgba(239,68,68,0.2); }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--muted);
+  }
+  .empty i { font-size: 36px; display: block; margin-bottom: 1rem; opacity: 0.4; }
+  .empty p { font-size: 14px; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 999;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.2s;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: rgba(34,197,94,0.4); color: var(--green); }
+  .toast.error   { border-color: rgba(239,68,68,0.4);  color: var(--red); }
+
+  /* ── Requested-by cell ── */
+  .requester {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .requester i { font-size: 13px; }
+
+  .size-cell { color: var(--muted); font-size: 12px; }
+  .time-cell { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+  hr.drawer-sep { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <i class="ti ti-shield-lock" aria-hidden="true"></i>
+    quarantine
+  </div>
+  <div class="header-right">
+    <span id="header-pending" class="badge badge-pending">0</span>
+    <span style="color:var(--muted)">en attente</span>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="nav-section">Files</div>
+    <div class="nav-item active" data-filter="pending" onclick="setFilter('pending',this)">
+      <span class="nav-label"><i class="ti ti-clock-hour-4" aria-hidden="true"></i>En attente</span>
+      <span id="count-pending" class="badge badge-pending">0</span>
+    </div>
+    <div class="nav-item" data-filter="approved" onclick="setFilter('approved',this)">
+      <span class="nav-label"><i class="ti ti-circle-check" aria-hidden="true"></i>Approuvés</span>
+      <span id="count-approved" class="badge badge-approved">0</span>
+    </div>
+    <div class="nav-item" data-filter="rejected" onclick="setFilter('rejected',this)">
+      <span class="nav-label"><i class="ti ti-circle-x" aria-hidden="true"></i>Rejetés</span>
+      <span id="count-rejected" class="badge badge-rejected">0</span>
+    </div>
+    <div class="nav-item" data-filter="all" onclick="setFilter('all',this)">
+      <span class="nav-label"><i class="ti ti-list" aria-hidden="true"></i>Tous</span>
+    </div>
+
+    <div class="nav-section">Actions</div>
+    <button class="refresh-btn" id="refresh-index-btn" onclick="refreshIndex()">
+      <i class="ti ti-refresh" aria-hidden="true"></i>
+      Refresh index
+    </button>
+  </aside>
+
+  <main>
+    <div class="toolbar">
+      <div class="search">
+        <i class="ti ti-search" aria-hidden="true"></i>
+        <input type="text" id="search-input" placeholder="Rechercher un package…" oninput="renderTable()">
+      </div>
+      <div class="filter-group" id="type-filters">
+        <button class="chip active" data-type="all" onclick="setTypeFilter('all',this)">tous</button>
+        <button class="chip" data-type="docker" onclick="setTypeFilter('docker',this)">docker</button>
+        <button class="chip" data-type="apt" onclick="setTypeFilter('apt',this)">apt</button>
+        <button class="chip" data-type="npm" onclick="setTypeFilter('npm',this)">npm</button>
+        <button class="chip" data-type="pip" onclick="setTypeFilter('pip',this)">pip</button>
+        <button class="chip" data-type="r" onclick="setTypeFilter('r',this)">R</button>
+        <button class="chip" data-type="go" onclick="setTypeFilter('go',this)">go</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Type</th>
+            <th>Version</th>
+            <th>Taille</th>
+            <th>Demandé par</th>
+            <th>Date</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+      <div id="empty-state" class="empty" style="display:none">
+        <i class="ti ti-package-off" aria-hidden="true"></i>
+        <p>Aucun package dans cette file</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Drawer -->
+<div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Détails du package">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title" id="drawer-title">—</div>
+      <div style="color:var(--muted);font-size:12px;margin-top:4px" id="drawer-sub">—</div>
+    </div>
+    <button class="drawer-close" onclick="closeDrawer()" aria-label="Fermer"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="drawer-meta" class="meta-grid"></div>
+  <div class="sha-block" id="drawer-sha"></div>
+  <hr class="drawer-sep">
+  <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:6px">Commentaire</div>
+  <textarea class="comment-area" id="drawer-comment" placeholder="Raison de la décision (optionnel)…"></textarea>
+  <div class="drawer-actions" id="drawer-actions"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" role="alert"></div>
+
+<script>
+const REPO_ICONS = {
+  go:     'ti-brand-golang',
+  docker: 'ti-brand-docker',
+  apt:    'ti-package',
+  npm:    'ti-brand-npm',
+  pip:    'ti-brand-python',
+  r:      'ti-chart-dots',
+};
+
+let allData = [];
+let currentFilter = 'pending';
+let currentType = 'all';
+let currentDrawerId = null;
+
+async function loadData() {
+  try {
+    // Charger TOUS les packages sans filtre pour avoir les compteurs corrects
+    const res = await fetch('/admin/api/requests');
+    const data = await res.json();
+    allData = Array.isArray(data) ? data : [];
+    updateCounts();
+    renderTable();
+  } catch(e) {
+    // Données d'exemple si API inaccessible
+    allData = getSampleData();
+    updateCounts();
+    renderTable();
+  }
+}
+
+function getSampleData() {
+  return [
+    { id:'req-001', repo_type:'apt', name:'nginx', version:'1.24.0-1', size:512000, sha256:'sha256:a3f9...', content_type:'application/vnd.debian.binary-package', requested_at:'2026-05-22T09:12:00Z', requested_by:'10.0.1.42', status:'pending', url:'http://archive.ubuntu.com/ubuntu/pool/main/n/nginx/nginx_1.24.0-1_amd64.deb', cache_key:'ubuntu/pool/main/n/nginx/nginx_1.24.0-1_amd64.deb' },
+    { id:'req-002', repo_type:'docker', name:'library/postgres', version:'16.3', size:187000000, sha256:'sha256:d8c2...', content_type:'application/vnd.oci.image.manifest.v1+json', requested_at:'2026-05-22T09:45:00Z', requested_by:'10.0.1.55', status:'pending', url:'https://registry-1.docker.io/v2/library/postgres/manifests/16.3', cache_key:'docker/manifests/library/postgres/16.3' },
+    { id:'req-003', repo_type:'npm', name:'lodash', version:'4.17.21', size:140000, sha256:'sha256:1f2a...', content_type:'application/octet-stream', requested_at:'2026-05-22T08:30:00Z', requested_by:'10.0.1.31', status:'approved', reviewed_by:'admin', reviewed_at:'2026-05-22T08:55:00Z', comment:'Dépendance validée', url:'https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz', cache_key:'npm/tarballs/lodash/4.17.21' },
+    { id:'req-004', repo_type:'pip', name:'requests', version:'2.32.3', size:95000, sha256:'sha256:7b3c...', content_type:'application/zip', requested_at:'2026-05-21T16:00:00Z', requested_by:'10.0.1.12', status:'rejected', reviewed_by:'admin', reviewed_at:'2026-05-21T16:30:00Z', comment:'Version vulnérable CVE-2024-XXXX', url:'https://files.pythonhosted.org/packages/requests-2.32.3.tar.gz', cache_key:'pip/files/requests-2.32.3.tar.gz' },
+    { id:'req-005', repo_type:'apt', name:'curl', version:'7.88.1-10', size:410000, sha256:'sha256:f7e1...', content_type:'application/vnd.debian.binary-package', requested_at:'2026-05-22T10:01:00Z', requested_by:'10.0.1.42', status:'pending', url:'http://archive.ubuntu.com/ubuntu/pool/main/c/curl/curl_7.88.1-10_amd64.deb', cache_key:'ubuntu/pool/main/c/curl/curl_7.88.1-10_amd64.deb' },
+    { id:'req-006', repo_type:'r', name:'ggplot2', version:'3.5.1', size:3800000, sha256:'sha256:9d4b...', content_type:'application/x-gzip', requested_at:'2026-05-22T10:15:00Z', requested_by:'10.0.1.71', status:'pending', url:'https://cran.r-project.org/src/contrib/ggplot2_3.5.1.tar.gz', cache_key:'r/packages/ggplot2_3.5.1.tar.gz' },
+    { id:'req-007', repo_type:'docker', name:'library/redis', version:'7.2', size:40000000, sha256:'sha256:c1a9...', content_type:'application/vnd.docker.distribution.manifest.v2+json', requested_at:'2026-05-22T07:50:00Z', requested_by:'10.0.1.99', status:'approved', reviewed_by:'ops-team', reviewed_at:'2026-05-22T08:10:00Z', comment:'Image officielle', url:'https://registry-1.docker.io/v2/library/redis/manifests/7.2', cache_key:'docker/manifests/library/redis/7.2' },
+    { id:'req-008', repo_type:'go', name:'github.com/gin-gonic/gin', version:'v1.9.1', size:280000, sha256:'sha256:e3f1...', content_type:'application/zip', requested_at:'2026-05-22T11:00:00Z', requested_by:'10.0.1.88', status:'pending', url:'https://proxy.golang.org/github.com/gin-gonic/gin/@v/v1.9.1.zip', cache_key:'go/github.com/gin-gonic/gin/@v/v1.9.1.zip' },
+  ];
+}
+
+function updateCounts() {
+  const all = getSampleData ? allData : allData;
+  const p = allData.filter(r=>r.status==='pending').length;
+  const a = allData.filter(r=>r.status==='approved').length;
+  const j = allData.filter(r=>r.status==='rejected').length;
+  document.getElementById('count-pending').textContent  = p;
+  document.getElementById('count-approved').textContent = a;
+  document.getElementById('count-rejected').textContent = j;
+  document.getElementById('header-pending').textContent = p;
+}
+
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  loadData();
+}
+
+function setTypeFilter(t, el) {
+  currentType = t;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+function fmtSize(b) {
+  if (b >= 1e9) return (b/1e9).toFixed(1)+' GB';
+  if (b >= 1e6) return (b/1e6).toFixed(1)+' MB';
+  if (b >= 1e3) return (b/1e3).toFixed(0)+' KB';
+  return b+' B';
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+function renderTable() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const filtered = allData.filter(r => {
+    const matchType   = currentType === 'all' || r.repo_type === currentType;
+    const matchSearch = !q || r.name.toLowerCase().includes(q) || r.version.toLowerCase().includes(q);
+    const matchStatus = currentFilter === 'all' || r.status === currentFilter;
+    return matchType && matchSearch && matchStatus;
+  });
+
+  const tbody = document.getElementById('table-body');
+  const empty = document.getElementById('empty-state');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(r => `
+    <tr>
+      <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name}</td>
+      <td><span class="repo-pill ${r.repo_type}"><i class="ti ${REPO_ICONS[r.repo_type]||'ti-package'}" aria-hidden="true"></i>${r.repo_type}</span></td>
+      <td style="color:var(--muted);font-size:12px">${r.version}</td>
+      <td class="size-cell">${fmtSize(r.size)}</td>
+      <td><span class="requester"><i class="ti ti-device-desktop" aria-hidden="true"></i>${r.requested_by}</span></td>
+      <td class="time-cell">${fmtDate(r.requested_at)}</td>
+      <td><span class="status-pill ${r.status}">${r.status}</span></td>
+      <td>
+        <div class="actions">
+          ${r.status==='pending' ? `
+            <button class="btn-approve" onclick="quickAction('${r.id}','approve')" title="Approuver"><i class="ti ti-check" aria-hidden="true"></i></button>
+            <button class="btn-reject"  onclick="quickAction('${r.id}','reject')"  title="Rejeter"><i class="ti ti-x" aria-hidden="true"></i></button>
+          ` : ''}
+          <button class="btn-detail" onclick="openDrawer('${r.id}')" title="Détails"><i class="ti ti-dots" aria-hidden="true"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openDrawer(id) {
+  const r = allData.find(x=>x.id===id);
+  if (!r) return;
+  currentDrawerId = id;
+
+  document.getElementById('drawer-title').textContent = r.name + ':' + r.version;
+  document.getElementById('drawer-sub').textContent = r.cache_key;
+  document.getElementById('drawer-sha').innerHTML = `<span style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:0.06em">SHA-256</span><br><span>${r.sha256||'—'}</span>`;
+  document.getElementById('drawer-comment').value = r.comment || '';
+
+  const meta = [
+    ['Type',        `<span class="repo-pill ${r.repo_type}">${r.repo_type}</span>`],
+    ['Statut',      `<span class="status-pill ${r.status}">${r.status}</span>`],
+    ['Taille',      fmtSize(r.size)],
+    ['Content-Type',r.content_type],
+    ['Demandé par', r.requested_by],
+    ['Demandé le',  fmtDate(r.requested_at)],
+    ['Revu par',    r.reviewed_by||'—'],
+    ['Revu le',     r.reviewed_at ? fmtDate(r.reviewed_at) : '—'],
+  ];
+
+  document.getElementById('drawer-meta').innerHTML = meta.map(([l,v])=>`
+    <div class="meta-cell">
+      <div class="meta-label">${l}</div>
+      <div class="meta-value">${v}</div>
+    </div>
+  `).join('');
+
+  const acts = document.getElementById('drawer-actions');
+  if (r.status === 'pending') {
+    acts.innerHTML = `
+      <button class="drawer-btn drawer-approve" onclick="drawerAction('approve')">
+        <i class="ti ti-circle-check" aria-hidden="true"></i> Approuver
+      </button>
+      <button class="drawer-btn drawer-reject" onclick="drawerAction('reject')">
+        <i class="ti ti-circle-x" aria-hidden="true"></i> Rejeter
+      </button>`;
+  } else {
+    acts.innerHTML = `<span style="color:var(--muted);font-size:12px">Décision déjà prise</span>`;
+  }
+
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  currentDrawerId = null;
+}
+
+async function drawerAction(action) {
+  const comment = document.getElementById('drawer-comment').value;
+  await doAction(currentDrawerId, action, comment);
+  closeDrawer();
+}
+
+async function quickAction(id, action) {
+  await doAction(id, action, '');
+}
+
+async function doAction(id, action, comment) {
+  try {
+    const res = await fetch(`/admin/api/requests/${id}/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comment })
+    });
+    if (!res.ok) throw new Error(await res.text());
+
+    // Mettre à jour localement
+    const req = allData.find(r=>r.id===id);
+    if (req) {
+      req.status = action === 'approve' ? 'approved' : 'rejected';
+      req.comment = comment;
+      req.reviewed_at = new Date().toISOString();
+    }
+    updateCounts();
+    renderTable();
+    showToast(action==='approve' ? 'Package approuvé' : 'Package rejeté', action==='approve' ? 'success' : 'error');
+  } catch(e) {
+    showToast('Erreur : ' + e.message, 'error');
+  }
+}
+
+async function refreshIndex() {
+  const btn = document.getElementById('refresh-index-btn');
+  btn.classList.add('spinning');
+  try {
+    await fetch('/admin/api/index/refresh', { method: 'POST' });
+    showToast('Index apt rafraîchi', 'success');
+  } catch(e) {
+    showToast('Erreur refresh', 'error');
+  } finally {
+    setTimeout(()=>btn.classList.remove('spinning'), 1000);
+  }
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  setTimeout(()=>t.classList.remove('show'), 2800);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDrawer();
+});
+
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>
