@@ -32,6 +32,7 @@
 
 I was looking for a lightweight proxy-cache for working on 4G and offline. Nexus Repository consumes 4–6 GB of RAM and reserves advanced security features for its paid edition. This program does not replace Nexus (which remains far more complete), but covers the main need with a very small memory footprint.
 If you require security, you can be linked to a security team. It is also possible to take out a subscription with Sonatype or a third-party company.
+
 ---
 
 ## Interface Web
@@ -41,6 +42,11 @@ Here is the current interface used to validate packages.
 
 On the left, you can find the package statuses (Pending/Approved/Rejected).
 The second section covers automatic approval: if the audit does not reveal any security issues, the package is automatically approved.
+
+In the security column, you will find the number of CVEs or reported issues in the package, along with their severity levels. The number with a decimal point is the sum of each severity level multiplied by the EPSS (which represents the real exploitation risk).
+
+On the right of each line ( Column: Action ), there are three small dots; that’s where you approve or reject the packages. You have all the security scanner information provided beforehand.
+
 
 Local users are additional users created outside of LDAP/OIDC authentication.
 Groups are used to authorize actions on packages. If a group exists in the LDAP or OIDC authentication (matching the CN attribute), the user will be able to view or perform actions on the repository.
