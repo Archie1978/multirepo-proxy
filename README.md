@@ -21,17 +21,31 @@
 
 **Typical use cases:**
 
-- Secure CI/CD builds by isolating third-party packages behind a validation checkpoint
+- Secure CI/CD builds by isolating third-party packages behind a validation checkpoint ( like tekton )
 - Maintain an internal cache for air-gapped or bandwidth-limited environments
 - Audit dependencies before they are introduced into a machine fleet
+- You can run it from JupyterHub (a tool for data scientists).
 
 ---
 
 ## Why this project?
 
 I was looking for a lightweight proxy-cache for working on 4G and offline. Nexus Repository consumes 4–6 GB of RAM and reserves advanced security features for its paid edition. This program does not replace Nexus (which remains far more complete), but covers the main need with a very small memory footprint.
-
+If you require security, you can be linked to a security team. It is also possible to take out a subscription with Sonatype or a third-party company.
 ---
+
+## Interface Web
+![Interface multirepo-proxy](interface-web.jpeg)
+
+Here is the current interface used to validate packages.
+
+On the left, you can find the package statuses (Pending/Approved/Rejected).
+The second section covers automatic approval: if the audit does not reveal any security issues, the package is automatically approved.
+
+Local users are additional users created outside of LDAP/OIDC authentication.
+Groups are used to authorize actions on packages. If a group exists in the LDAP or OIDC authentication (matching the CN attribute), the user will be able to view or perform actions on the repository.
+
+Users stored in the database will obviously have their passwords encrypted.
 
 ## Architecture
 
