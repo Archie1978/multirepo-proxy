@@ -1,0 +1,262 @@
+server:
+  # Proxy listening address.
+  # Environment variable: MULTIREPO_SERVER_ADDR
+  addr: ":8222"
+
+storage:
+  # Root directory of disk cache.
+  # Environment variable: MULTIREPO_STORAGE_CACHE_DIR
+  cache_dir: ./var/cache/multirepo
+
+  # SQLite database for quarantine.
+  # Environment variable: MULTIREPO_STORAGE_QUARANTINE_DB
+  db_path: ./var/lib/multirepo/multirepo.db
+
+proxy:
+  # Outgoing HTTP proxy URL — without credentials.
+  # Environment variable: MULTIREPO_PROXY_HTTP
+  http: ""   # ex: "http://proxy.corp:3128"
+
+  # Outgoing HTTPS proxy URL — without credentials (usually same as http).
+  # Environment variable: MULTIREPO_PROXY_HTTPS
+  https: ""  # ex: "http://proxy.corp:3128"
+
+  # Authentication credentials for the proxy.
+  # Prefer environment variables in production to avoid storing secrets here:
+  #   MULTIREPO_PROXY_USERNAME / MULTIREPO_PROXY_PASSWORD
+  username: ""
+  password: ""
+
+  # Hosts or domains excluded from proxy, separated by commas.
+  # Syntax: "localhost,127.0.0.1,.corp.local"
+  #   - "host"    → exact host and its subdomains
+  #   - ".domain" → subdomains only
+  #   - "*"       → bypass all (disables proxy)
+  # Environment variable: MULTIREPO_PROXY_NO_PROXY
+  no_proxy: ""
+
+security:
+  osv:
+    # Enable scanning via OSV.dev (open source vulnerabilities database — free, no key).
+    # Supports: Go, PyPI, Debian, CRAN, npm.
+    # Environment variable: MULTIREPO_SECURITY_OSV_ENABLED
+    enabled: true
+    timeout: 10s
+
+  nvd:
+    # Enable scanning via NVD NIST (official CVE — keyword search).
+    # Without key: 5 req/30s. With key: 50 req/30s (recommended for production).
+    # Environment variable: MULTIREPO_SECURITY_NVD_ENABLED
+    enabled: true
+    # Recommended environment variable: MULTIREPO_SECURITY_NVD_API_KEY
+    api_key: ""
+    timeout: 15s
+
+  sonatype:
+    # Enable scanning via Sonatype OSS Index (https://ossindex.sonatype.org).
+    # Supports: Go, PyPI, Debian, CRAN, npm (Package URL / purl format).
+    # Without token: 128 req/24h. With token (free): 16 req/s.
+    # Environment variable: MULTIREPO_SECURITY_SONATYPE_ENABLED
+    enabled: false
+    # Recommended environment variable: MULTIREPO_SECURITY_SONATYPE_TOKEN
+    token: "sonatype_pat_XXXXXXX"
+    timeout: 15s
+
+  epss:
+    # EPSS enrichment (Exploit Prediction Scoring System) — https://www.first.org/epss/
+    # Adds real exploitation probability to each detected CVE (0–100%).
+    # Public FIRST.org API, no key or authentication needed.
+    # Environment variable: MULTIREPO_SECURITY_EPSS_ENABLED
+    enabled: true
+    timeout: 10s
+
+auth:
+  # Authentication provider for admin interface.
+  # Values: "none" (default, no protection), "basic", "ldap", "oidc"
+  # Environment variable: MULTIREPO_AUTH_PROVIDER
+  provider: ldap
+
+  # SQLite database for users, groups and rules.
+  # Used regardless of provider (basic, ldap, oidc).
+  # Environment variable: MULTIREPO_AUTH_DB_PATH
+  db_path: ./var/lib/multirepo/auth.db
+
+  # Allow local accounts (DB) to connect even with provider = ldap.
+  # Environment variable: MULTIREPO_AUTH_LOCAL_USERS
+  local_users: true
+
+  # Signing key for OIDC session cookies (HMAC-SHA256).
+  # Generate: openssl rand -hex 32
+  # Environment variable: MULTIREPO_AUTH_SESSION_SECRET  (recommended to avoid storing here)
+  session_secret: ""
+
+  basic:
+    # Text displayed in the browser authentication dialog.
+    realm: "multirepo-proxy admin"
+    # Apache htpasswd file. Supported formats: bcrypt ($2y$) and SHA1 ({SHA}).
+    # Create with: htpasswd -B -c /etc/multirepo/htpasswd <username>
+    htpasswd_file: ""   # ex: /etc/multirepo/htpasswd
+
+  oidc:
+    # Base URL of OIDC provider (must expose /.well-known/openid-configuration).
+    issuer: ""      # ex: https://keycloak.corp/realms/myrealm
+    client_id: ""
+    # Recommended environment variable: MULTIREPO_AUTH_OIDC_CLIENT_SECRET
+    client_secret: ""
+    # Must match exactly the URI registered with the provider.
+    redirect_url: ""  # ex: https://proxy.corp:8222/admin/auth/callback
+    scopes: [openid, email, profile]
+    # Session validity duration in hours.
+    session_ttl: 8
+
+
+  ldap:
+    # LDAP server URL. Supported schemes: ldap:// (389) and ldaps:// (636).
+    # Environment variable: MULTIREPO_AUTH_LDAP_URL
+    url: "ldap://192.168.196.166:389"           # ex: "ldap://ldap.corp:389" or "ldaps://ldap.corp:636"
+
+    # DN of service account used to search for users.
+    # Leave empty for anonymous bind.
+    # Environment variable: MULTIREPO_AUTH_LDAP_BIND_DN
+    bind_dn: "cn=admin,dc=ironmachine,dc=dev,dc=valmir"       # ex: "cn=svc-multirepo,ou=services,dc=corp,dc=local"
+
+    # Service account password.
+    # Recommended environment variable: MULTIREPO_AUTH_LDAP_BIND_PASSWORD
+    bind_password: "adminpassword"
+
+    # Base DN for user search.
+    base_dn: "dc=ironmachine,dc=dev,dc=valmir"       # ex: ""
+
+    # LDAP filter to locate user entry (%s = username).
+    # OpenLDAP/Samba: "(uid=%s)"  —  Active Directory: "(sAMAccountName=%s)"
+    user_filter: "(uid=%s)"
+
+    # Text displayed in the browser authentication dialog.
+    realm: "multirepo-proxy admin"
+
+    # Disable TLS certificate verification (ldaps://).
+    # Only use in development — set to false in production.
+    tls_skip_verify: true
+
+    # LDAP connection and request timeout.
+    timeout: 5s
+
+    # ── LDAP group → local group mapping ──────────────────────────────
+    # If group_base_dn is empty, groups come from local database (default behavior).
+    # When set, LDAP groups are read automatically on each login
+    # and mapped to local groups — no manual user creation needed.
+
+    # Base DN for group search.
+    # Ex: "ou=groups,dc=corp,dc=local"
+    # Environment variable: MULTIREPO_AUTH_LDAP_GROUP_BASE_DN
+    group_base_dn: "ou=Groups,dc=ironmachine,dc=dev,dc=valmir"
+
+    # LDAP filter to find user's groups.
+    #   %s  → replaced by user's full DN  (member / uniqueMember attribute)
+    #   %u  → replaced by username / uid  (memberUid, posixGroup attribute)
+    # OpenLDAP groupOfNames  : "(member=%s)"          ← default
+    # Active Directory       : "(&(objectClass=group)(member=%s))"
+    # posixGroup (memberUid) : "(memberUid=%u)"
+    group_filter: "(member=%s)"
+
+    # LDAP attribute containing group name (used for mapping).
+    # Default: "cn"
+    group_attribute: cn
+
+    # LDAP group name → local group name mapping.
+    # Only listed groups are transmitted; others are ignored.
+    # Local group "admin" grants all permissions (implicit superadmin).
+    # Leave empty ({}) to disable mapping even if group_base_dn is set.
+    group_mapping: {}
+    # Examples:
+    #   admins:        admin        # LDAP group "admins"        → superadmin
+    #   pkg-approvers: approvers    # LDAP group "pkg-approvers" → can approve/reject
+    #   ops:           ops          # LDAP group "ops"           → local group "ops"
+
+
+
+logging:
+  # Minimum log level: "debug", "info", "warn", "error"
+  level: info
+
+  stdout:
+    enabled: true
+    # Format: "text" (colored, readable) or "json" (structured — recommended for containers)
+    format: text
+
+  file:
+    enabled: false
+    path: ./var/log/multirepo-proxy.log
+    # Max size in MB before rotation.
+    max_size_mb: 100
+    # Number of archived files to keep.
+    max_backups: 5
+    compress: false
+
+  logstash:
+    enabled: false
+    host: ""       # ex: "logstash.corp:5044"
+    protocol: tcp  # "tcp" or "udp"
+
+  loki:
+    enabled: false
+    url: ""        # ex: "http://loki.corp:3100"
+    labels:
+      app: multirepo-proxy
+    batch_size: 100
+    batch_wait: 2s
+    timeout: 5s
+
+drivers:
+
+  apt:
+    enabled: true
+    auth_required: false
+    # URL prefix exposed by the proxy.
+    prefix: /ubuntu/
+    # Upstream apt repository.
+    upstream: http://archive.ubuntu.com/ubuntu
+    gpg:
+      # Directory for storing imported GPG keys (via admin API).
+      keyring_dir: ./var/lib/multirepo/keyrings/apt
+      # If true, .deb files without _gpgorigin signature are rejected.
+      reject_unsigned: false
+
+  docker:
+    enabled: true
+    auth_required: false
+    prefix: /v2/
+    upstream: https://registry-1.docker.io
+    # Credentials for private registries.
+    # Prefer environment variables in production:
+    #   MULTIREPO_DRIVERS_DOCKER_USERNAME
+    #   MULTIREPO_DRIVERS_DOCKER_PASSWORD
+    username: ""
+    password: ""
+
+  pypi:
+    enabled: true
+    auth_required: false
+    prefix: /pypi/
+    upstream: https://pypi.org
+
+  go:
+    enabled: true
+    auth_required: false
+    prefix: /go/
+    upstream: https://proxy.golang.org
+
+  cran:
+    enabled: true
+    auth_required: false
+    prefix: /cran/
+    upstream: https://cran.r-project.org
+    
+  npm:
+    enabled: true
+    auth_required: false
+    prefix: /npm/
+    # Upstream npm registry. Compatible with any registry that implements
+    # the npm registry protocol (npmjs.org, Verdaccio, Nexus, Artifactory…).
+    upstream: https://registry.npmjs.org
+    
